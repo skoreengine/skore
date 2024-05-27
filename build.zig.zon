@@ -1,0 +1,13 @@
+.{
+    .name = "skore",
+    .version = "0.0.0",
+    .dependencies = .{
+        .zglfw = .{ .path = "libs/zglfw" },
+        .system_sdk = .{ .path = "libs/system-sdk" },
+        .zopengl = .{ .path = "libs/zopengl" },
+    },
+
+    .paths = .{
+        "",
+    },
+}

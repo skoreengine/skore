@@ -1,0 +1,12 @@
+
+
+zig-cache
+zig-out
+backup
+
+build/
+build-*/
+docgen_tmp/
+
+.vs
+.idea*/
