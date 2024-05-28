@@ -1,0 +1,1 @@
+const Registry = struct {};
