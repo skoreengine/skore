@@ -8,8 +8,8 @@ const registry = @import("core/registry.zig");
 pub fn main() !void {
     std.debug.print("Hello, skore\n", .{});
 
-    try registry.init(std.heap.page_allocator);
-    defer registry.deinit();
+    var reg = registry.Registry.init(std.heap.page_allocator);
+    defer reg.deinit();
 
     try platform.init();
 
