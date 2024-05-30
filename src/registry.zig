@@ -176,10 +176,12 @@ test "test registry basics" {
 
     try registry.register(TestType);
     try registry.register(TypeWithFuncs);
+    
+    const name = @typeName(TestType);
 
-    if (registry.findTypeByName("registry.TestType")) |typeHandler| {
+    if (registry.findTypeByName(name)) |typeHandler| {
 
-        try std.testing.expectEqualStrings("registry.TestType", typeHandler.getName());
+        try std.testing.expectEqualStrings(name, typeHandler.getName());
         try std.testing.expect(typeHandler.getTypeId() != 0);
 
         const t = typeHandler.create(typeHandler.ctx, std.testing.allocator);
