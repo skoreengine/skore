@@ -19,6 +19,7 @@ pub fn build(b: *std.Build) void {
     @import("system_sdk").addLibraryPathsTo(exe);
 
     const zopengl = b.dependency("zopengl", .{});
+
     exe.root_module.addImport("zopengl", zopengl.module("root"));
 
 

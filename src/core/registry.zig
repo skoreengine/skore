@@ -12,9 +12,9 @@ pub const TypeHandler = packed struct {
     destroy: *const fn (ctx: *anyopaque, alloc: std.mem.Allocator, ptr: *anyopaque) void = undefined,
 };
 
-fn comptimeGetId(comptime t : type)  TypeId {
-    comptime{
-        var hash : TypeId = 0;
+fn comptimeGetId(comptime t: type) TypeId {
+    comptime {
+        var hash: TypeId = 0;
         for (@typeName(t)) |n| {
             hash = @addWithOverflow(@addWithOverflow(hash << 5, hash)[0], n)[0];
         }
@@ -22,11 +22,11 @@ fn comptimeGetId(comptime t : type)  TypeId {
     }
 }
 
-fn canInitialize(comptime T : type) bool {
-    comptime{
+fn canInitialize(comptime T: type) bool {
+    comptime {
         var ret = false;
         for (@typeInfo(T).Struct.fields) |field| {
-            if (field.default_value) |_|  {
+            if (field.default_value) |_| {
                 ret = true;
             }
         }
@@ -34,7 +34,7 @@ fn canInitialize(comptime T : type) bool {
     }
 }
 
-pub fn getTypeId(comptime t : type)   TypeId {
+pub fn getTypeId(comptime t: type) TypeId {
     return comptime comptimeGetId(t);
 }
 
@@ -90,19 +90,15 @@ pub fn NativeTypeHandler(comptime T: type) type {
     };
 }
 
-
 pub const Registry = struct {
     allocator: std.mem.Allocator = undefined,
     types_by_name: std.StringHashMap(std.ArrayList(TypeHandler)) = undefined,
 
     pub fn init(alloc: std.mem.Allocator) Registry {
-        return .{
-            .allocator = alloc,
-            .types_by_name = std.StringHashMap(std.ArrayList(TypeHandler)).init(alloc)
-        };
+        return .{ .allocator = alloc, .types_by_name = std.StringHashMap(std.ArrayList(TypeHandler)).init(alloc) };
     }
 
-    pub fn deinit(self:*Registry) void {
+    pub fn deinit(self: *Registry) void {
         var it = self.types_by_name.iterator();
         while (it.next()) |kv| {
             kv.value_ptr.deinit();
@@ -110,7 +106,7 @@ pub const Registry = struct {
         self.types_by_name.deinit();
     }
 
-    fn registerType(self:*Registry, T: type) !void {
+    fn registerType(self: *Registry, T: type) !void {
         const name = @typeName(T);
         const res = try self.types_by_name.getOrPut(name);
 
@@ -126,25 +122,22 @@ pub const Registry = struct {
         std.debug.print("type {s} added \n", .{name});
     }
 
-    pub fn register(self:*Registry, T: type) !void {
+    pub fn register(self: *Registry, T: type) !void {
         switch (@typeInfo(T)) {
             inline .Struct => try registerType(self, T),
             else => return error.NotSupportedYet,
         }
     }
 
-    pub fn findTypeByName(self:*Registry, name: [:0]const u8) !TypeHandler {
+    pub fn findTypeByName(self: *Registry, name: [:0]const u8) ?TypeHandler {
         const value = self.types_by_name.get(name);
         if (value) |v| {
             return v.getLast();
         } else {
-            return error.NotFound;
+            return null;
         }
     }
-
 };
-
-
 
 //testing
 const TestType = struct {
@@ -184,15 +177,19 @@ test "test registry basics" {
     try registry.register(TestType);
     try registry.register(TypeWithFuncs);
 
-    const typeHandler = try registry.findTypeByName("registry.TestType");
-    try std.testing.expectEqualStrings("registry.TestType", typeHandler.getName());
-    try std.testing.expect(typeHandler.getTypeId() != 0);
+    if (registry.findTypeByName("registry.TestType")) |typeHandler| {
 
-     const t = typeHandler.create(typeHandler.ctx, std.testing.allocator);
-     typeHandler.init(typeHandler.ctx, std.testing.allocator, t);
+        try std.testing.expectEqualStrings("registry.TestType", typeHandler.getName());
+        try std.testing.expect(typeHandler.getTypeId() != 0);
 
-     const testType: *TestType = @alignCast(@ptrCast(t));
-     try std.testing.expectEqual(0, testType.x);
+        const t = typeHandler.create(typeHandler.ctx, std.testing.allocator);
+        typeHandler.init(typeHandler.ctx, std.testing.allocator, t);
 
-     typeHandler.destroy(typeHandler.ctx, std.testing.allocator, t);
+        const testType: *TestType = @alignCast(@ptrCast(t));
+        try std.testing.expectEqual(0, testType.x);
+
+        typeHandler.destroy(typeHandler.ctx, std.testing.allocator, t);
+    } else {
+        try std.testing.expect(false);
+    }
 }
