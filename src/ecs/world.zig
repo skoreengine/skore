@@ -131,6 +131,14 @@ test "test basic world" {
 
     const entity = world.spawn(.{ Position, Speed });
 
+    _ = world.spawn(.{ Position{
+        .x = 10,
+        .y = 20,
+    }, Speed{
+        .x = 1.2,
+        .y = 1.2,
+    }});
+
     try std.testing.expectEqual(3, entity);
 
     world.add(entity, .{ Position{
