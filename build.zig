@@ -5,11 +5,19 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    const zglfw = b.dependency("zglfw", .{});
+    const zopengl = b.dependency("zopengl", .{});
+
     const module = b.addModule("skore", .{
         .root_source_file = .{ .path = "src/skore.zig" },
         .target = target,
         .optimize = optimize,
     });
+
+    module.linkLibrary(zglfw.artifact("glfw"));
+
+    module.addImport("zglfw", zglfw.module("root"));
+    module.addImport("zopengl", zopengl.module("root"));
 
 
     const testbed = b.addExecutable(.{
@@ -21,6 +29,8 @@ pub fn build(b: *std.Build) void {
     
     b.installArtifact(testbed);
     testbed.root_module.addImport("skore", module);
+
+    @import("system_sdk").addLibraryPathsTo(testbed);
 
     const run_cmd = b.addRunArtifact(testbed);
     run_cmd.step.dependOn(b.getInstallStep());

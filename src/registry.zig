@@ -106,9 +106,9 @@ pub const Registry = struct {
         self.types_by_name.deinit();
     }
 
-    fn registerType(self: *Registry, T: type) !void {
+    fn registerType(self: *Registry, T: type) void {
         const name = @typeName(T);
-        const res = try self.types_by_name.getOrPut(name);
+        const res = self.types_by_name.getOrPut(name) catch return;
 
         if (!res.found_existing) {
             res.value_ptr.* = std.ArrayList(TypeHandler).init(self.allocator);
@@ -117,15 +117,15 @@ pub const Registry = struct {
         var type_handler = TypeHandler{};
         NativeTypeHandler(T).initHandler(&type_handler);
 
-        try res.value_ptr.append(type_handler);
+        res.value_ptr.append(type_handler)  catch return;
 
         std.debug.print("type {s} added \n", .{name});
     }
 
-    pub fn register(self: *Registry, T: type) !void {
+    pub fn add(self: *Registry, T: type) void {
         switch (@typeInfo(T)) {
-            inline .Struct => try registerType(self, T),
-            else => return error.NotSupportedYet,
+            inline .Struct => registerType(self, T),
+            else => return,
         }
     }
 
