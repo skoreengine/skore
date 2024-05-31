@@ -174,8 +174,8 @@ test "test registry basics" {
 
     try std.testing.expectEqual(registry.types_by_name.count(), 0);
 
-    try registry.register(TestType);
-    try registry.register(TypeWithFuncs);
+    registry.add(TestType);
+    registry.add(TypeWithFuncs);
     
     const name = @typeName(TestType);
 
