@@ -10,10 +10,17 @@ pub fn makeArchetypeHash(ids : [*]const skore.TypeId, size: u32) u128 {
     return hash;
 }
 
+pub const ArchetypeType = struct {
+    id : skore.TypeId,
+    data_offset : u32,
+    state_offset : u32,
+    type_handler : ?*skore.TypeHandler
+};
+
 pub const Archetype = struct {
     id: u32,
     hash : u128,
-    ids : std.ArrayList(skore.TypeId)
+    types : std.ArrayList(ArchetypeType)
 };
 
 pub const ArchetypeHashMap = std.AutoHashMap(u128,  std.ArrayList(*Archetype));

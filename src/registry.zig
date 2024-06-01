@@ -92,32 +92,60 @@ pub fn NativeTypeHandler(comptime T: type) type {
 
 pub const Registry = struct {
     allocator: std.mem.Allocator = undefined,
-    types_by_name: std.StringHashMap(std.ArrayList(TypeHandler)) = undefined,
+    types_by_id: std.AutoHashMap(u128, std.ArrayList(*TypeHandler)) = undefined,
+    types_by_name: std.StringHashMap(std.ArrayList(*TypeHandler)) = undefined,
 
     pub fn init(alloc: std.mem.Allocator) Registry {
-        return .{ .allocator = alloc, .types_by_name = std.StringHashMap(std.ArrayList(TypeHandler)).init(alloc) };
+        return .{
+            .allocator = alloc,
+            .types_by_id = std.AutoHashMap(u128, std.ArrayList(*TypeHandler)).init(alloc),
+            .types_by_name = std.StringHashMap(std.ArrayList(*TypeHandler)).init(alloc)
+        };
     }
 
     pub fn deinit(self: *Registry) void {
-        var it = self.types_by_name.iterator();
-        while (it.next()) |kv| {
-            kv.value_ptr.deinit();
+        {
+            var it = self.types_by_name.iterator();
+            while (it.next()) |kv| {
+                for(kv.value_ptr.items) |type_handler| {
+                    self.allocator.destroy(type_handler);
+                }
+                kv.value_ptr.deinit();
+            }
         }
+        {
+            var it = self.types_by_id.iterator();
+            while (it.next()) |kv| {
+                kv.value_ptr.deinit();
+            }
+        }
+
         self.types_by_name.deinit();
+        self.types_by_id.deinit();
     }
 
     fn registerType(self: *Registry, T: type) void {
         const name = @typeName(T);
-        const res = self.types_by_name.getOrPut(name) catch return;
+        const typeId = getTypeId(T);
 
-        if (!res.found_existing) {
-            res.value_ptr.* = std.ArrayList(TypeHandler).init(self.allocator);
+        const res_by_name = self.types_by_name.getOrPut(name) catch return;
+
+        if (!res_by_name.found_existing) {
+            res_by_name.value_ptr.* = std.ArrayList(*TypeHandler).init(self.allocator);
         }
 
-        var type_handler = TypeHandler{};
-        NativeTypeHandler(T).initHandler(&type_handler);
+        const res_by_id = self.types_by_id.getOrPut(typeId) catch return;
 
-        res.value_ptr.append(type_handler)  catch return;
+        if (!res_by_id.found_existing) {
+            res_by_id.value_ptr.* = std.ArrayList(*TypeHandler).init(self.allocator);
+        }
+
+        const type_handler = self.allocator.create(TypeHandler) catch return;
+
+        NativeTypeHandler(T).initHandler(type_handler);
+
+        res_by_name.value_ptr.append(type_handler) catch return;
+        res_by_id.value_ptr.append(type_handler) catch return;
 
         std.debug.print("type {s} added \n", .{name});
     }
@@ -129,8 +157,17 @@ pub const Registry = struct {
         }
     }
 
-    pub fn findTypeByName(self: *Registry, name: [:0]const u8) ?TypeHandler {
+    pub fn findTypeByName(self: *Registry, name: [:0]const u8) ?*TypeHandler {
         const value = self.types_by_name.get(name);
+        if (value) |v| {
+            return v.getLast();
+        } else {
+            return null;
+        }
+    }
+
+    pub fn findTypeById(self: *Registry, type_id: TypeId) ?*TypeHandler {
+        const value = self.types_by_id.get(type_id);
         if (value) |v| {
             return v.getLast();
         } else {
@@ -176,11 +213,10 @@ test "test registry basics" {
 
     registry.add(TestType);
     registry.add(TypeWithFuncs);
-    
+
     const name = @typeName(TestType);
 
     if (registry.findTypeByName(name)) |typeHandler| {
-
         try std.testing.expectEqualStrings(name, typeHandler.getName());
         try std.testing.expect(typeHandler.getTypeId() != 0);
 

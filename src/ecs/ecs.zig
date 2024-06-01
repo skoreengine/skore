@@ -5,6 +5,7 @@ pub const world = @import("world.zig");
 
 pub const World = world.World;
 pub const Archetype = archetype.Archetype;
+pub const ArchetypeType = archetype.ArchetypeType;
 pub const ArchetypeHashMap = archetype.ArchetypeHashMap;
 
 pub const archetype_max_components : u8 = 32;

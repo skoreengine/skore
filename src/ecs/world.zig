@@ -29,16 +29,18 @@ const EntityStorage = struct {
 
 pub const World = struct {
     allocator: std.mem.Allocator,
+    registry: *skore.Registry,
     archetypes: ecs.ArchetypeHashMap,
     entity_storage: std.ArrayList(EntityStorage),
     entity_counter: ecs.Entity,
 
-    pub fn init(allocator: std.mem.Allocator) World {
+    pub fn init(registry: *skore.Registry, allocator: std.mem.Allocator) World {
         return .{
             .allocator = allocator,
+            .registry = registry,
             .archetypes = ecs.ArchetypeHashMap.init(allocator),
             .entity_storage = std.ArrayList(EntityStorage).init(allocator),
-            .entity_counter = 0,
+            .entity_counter = 0
         };
     }
 
@@ -47,7 +49,7 @@ pub const World = struct {
 
         while(iter.next()) |archetypes| {
             for(archetypes.value_ptr.items) |archetype| {
-                archetype.ids.deinit();
+                archetype.types.deinit();
                 self.allocator.destroy(archetype);
             }
             archetypes.value_ptr.deinit();
@@ -102,8 +104,16 @@ pub const World = struct {
         var archetype = try world.allocator.create(ecs.Archetype);
         archetype.hash = hash;
         archetype.id = world.archetypes.count();
-        archetype.ids = std.ArrayList(skore.TypeId).init(world.allocator);
-        try archetype.ids.insertSlice(0, ids);
+        archetype.types = try std.ArrayList(ecs.ArchetypeType).initCapacity(world.allocator, ids.len);
+
+        for (ids) |id| {
+            try archetype.types.append(.{
+                .id = id,
+                .data_offset = 0,
+                .state_offset = 0,
+                .type_handler = world.registry.findTypeById(id)
+            });
+        }
 
         const res = try world.archetypes.getOrPut(hash);
         if (!res.found_existing) {
@@ -165,14 +175,20 @@ const Position = struct { x: f32, y: f32 };
 const Speed = struct { x: f32, y: f32 };
 
 test "test basic world" {
-    var world = World.init(std.testing.allocator);
+    var registry = skore.Registry.init(std.heap.page_allocator);
+    defer registry.deinit();
+
+    registry.add(Position);
+    registry.add(Speed);
+
+    var world = World.init(&registry, std.testing.allocator);
     defer world.deinit();
 
     try std.testing.expectEqual(0, world.new());
     try std.testing.expectEqual(1, world.new());
     try std.testing.expectEqual(2, world.new());
 
-    var a = ecs.Archetype{ .hash = 0, .id = 1, .ids = undefined };
+    var a = ecs.Archetype{ .hash = 0, .id = 1, .types = undefined };
 
     var storage = world.findOrCreateStorage(0);
     storage.archetype = &a;
@@ -181,21 +197,21 @@ test "test basic world" {
 
     const entity = try world.spawn(.{ Position, Speed });
 
-    _ = try world.spawn(.{ Position{
+    _ = try world.spawn(.{Position{
         .x = 10,
-        .y = 20,
+        .y = 20
     }, Speed{
         .x = 1.2,
-        .y = 1.2,
-    } });
+        .y = 1.2
+    }});
 
     try std.testing.expectEqual(3, entity);
 
     try world.add(entity, .{ Position{
         .x = 10,
-        .y = 20,
+        .y = 20
     }, Speed{
         .x = 1.2,
-        .y = 1.2,
+        .y = 1.2
     } });
 }
