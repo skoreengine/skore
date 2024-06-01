@@ -9,4 +9,5 @@ pub const ArchetypeHashMap = archetype.ArchetypeHashMap;
 
 test {
   _ = world;
+  _ = archetype;
 }

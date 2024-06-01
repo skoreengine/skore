@@ -55,22 +55,17 @@ pub const World = struct {
         return count;
     }
 
+    fn getCompNum(comptime types: anytype) usize {
+        const struct_type = @typeInfo(@TypeOf(types));
+        return struct_type.Struct.fields.len;
+    }
+
     fn findOrCreateArchetype(comptime types: anytype) void {
+        comptime var ids: [getCompNum(types)]skore.TypeId = undefined;
         comptime {
             const struct_type = @typeInfo(@TypeOf(types));
-            if (struct_type != .Struct) {
-                @compileError("expected tuple found " ++ @typeName(@TypeOf(types)));
-            }
-
-            var ids: [struct_type.Struct.fields.len]skore.TypeId = undefined;
-
             for (struct_type.Struct.fields, 0..) |field, i| {
-
                 const field_type = @typeInfo(field.type);
-                if (field_type != .Type and field_type != .Struct) {
-                    @compileError("expected type or struct argument, found " ++ @typeName(field.type));
-                }
-
                 if (field_type == .Type) {
                     if (field.default_value) |defaut_value|
                     {
@@ -82,14 +77,16 @@ pub const World = struct {
                     ids[i] = skore.registry.getTypeId(field.type);
                 }
             }
-
-            @compileLog(ids);
+            std.mem.sort(skore.TypeId, &ids,{},std.sort.asc(skore.TypeId));
         }
+        std.debug.print(" test {d}", .{ids});
     }
 
     pub fn add(world: *World, entity: ecs.Entity, comptime types: anytype) void {
         _ = world.findOrCreateStorage(entity);
-        comptime findOrCreateArchetype(types);
+
+
+        findOrCreateArchetype(types);
     }
 
     pub fn spawn(self: *World, comptime types: anytype) ecs.Entity {
