@@ -28,12 +28,18 @@ const EntityStorage = struct {
 };
 
 pub const World = struct {
+    allocator: std.mem.Allocator,
     archetypes: ecs.ArchetypeHashMap,
     entity_storage: std.ArrayList(EntityStorage),
     entity_counter: ecs.Entity,
 
     pub fn init(allocator: std.mem.Allocator) World {
-        return .{ .archetypes = ecs.ArchetypeHashMap.init(allocator), .entity_storage = std.ArrayList(EntityStorage).init(allocator), .entity_counter = 0 };
+        return .{
+            .allocator = allocator,
+            .archetypes = ecs.ArchetypeHashMap.init(allocator),
+            .entity_storage = std.ArrayList(EntityStorage).init(allocator),
+            .entity_counter = 0,
+        };
     }
 
     pub fn deinit(self: *World) void {
@@ -60,42 +66,72 @@ pub const World = struct {
         return struct_type.Struct.fields.len;
     }
 
-    fn findOrCreateArchetype(comptime types: anytype) void {
-        comptime var ids: [getCompNum(types)]skore.TypeId = undefined;
-        comptime {
-            const struct_type = @typeInfo(@TypeOf(types));
-            for (struct_type.Struct.fields, 0..) |field, i| {
-                const field_type = @typeInfo(field.type);
-                if (field_type == .Type) {
-                    if (field.default_value) |defaut_value|
-                    {
-                        const typ : *type = @ptrCast(@constCast(defaut_value));
-                        ids[i] = skore.registry.getTypeId(typ.*);
-                    }
+    fn getCompIds(comptime types: anytype, comptime ids: []skore.TypeId) void {
+        const struct_type = @typeInfo(@TypeOf(types));
+        for (struct_type.Struct.fields, 0..) |field, i| {
+            const field_type = @typeInfo(field.type);
+            if (field_type == .Type) {
+                if (field.default_value) |defaut_value| {
+                    const typ: *type = @ptrCast(@constCast(defaut_value));
+                    ids[i] = skore.registry.getTypeId(typ.*);
                 }
-                else if (field_type == .Struct) {
-                    ids[i] = skore.registry.getTypeId(field.type);
-                }
+            } else if (field_type == .Struct) {
+                ids[i] = skore.registry.getTypeId(field.type);
             }
-            std.mem.sort(skore.TypeId, &ids,{},std.sort.asc(skore.TypeId));
         }
-        std.debug.print(" test {d}", .{ids});
     }
 
-    pub fn add(world: *World, entity: ecs.Entity, comptime types: anytype) void {
-        _ = world.findOrCreateStorage(entity);
+    fn findOrCreateArchetype(world: *World, ids: []skore.TypeId) !*ecs.Archetype {
+        const hash = ecs.archetype.makeArchetypeHash(ids);
+
+        if (world.archetypes.get(hash)) |archetype| {
+            //TODO - check multiple archetypes with same id
+            if (archetype.items.len > 1) {
+                std.debug.print("multiple archetypes found for id {d}", .{hash});
+                unreachable;
+            }
+            return archetype.getLast();
+        }
+
+        std.mem.sort(skore.TypeId, ids,{},std.sort.asc(skore.TypeId));
+
+        var archetype = try world.allocator.create(ecs.Archetype);
+        archetype.hash = hash;
+        archetype.id = world.archetypes.count();
+
+        const res = try world.archetypes.getOrPut(hash);
+        if (!res.found_existing) {
+            res.value_ptr.* = std.ArrayList(*ecs.Archetype).init(world.allocator);
+        }
+
+        try res.value_ptr.append(archetype);
 
 
-        findOrCreateArchetype(types);
+        return archetype;
+
     }
 
-    pub fn spawn(self: *World, comptime types: anytype) ecs.Entity {
+    pub fn add(world: *World, entity: ecs.Entity, comptime types: anytype) !void {
+        comptime var new_ids: [getCompNum(types)]skore.TypeId = undefined;
+        comptime getCompIds(types, &new_ids);
+
+        var new_ids_1 = new_ids;
+
+        var entity_storage = world.findOrCreateStorage(entity);
+        if (entity_storage.archetype == null) {
+            entity_storage.archetype = try world.findOrCreateArchetype(&new_ids_1);
+        }
+
+        std.debug.print(" ids {d}", .{new_ids});
+
+        //findOrCreateArchetype(types);
+    }
+
+    pub fn spawn(self: *World, comptime types: anytype) !ecs.Entity {
         const entity = self.new();
-        self.add(entity, types);
+        try self.add(entity, types);
         return entity;
     }
-
-
 
     pub fn get(_: *World, T: type, _: ecs.Entity) ?*const T {
         return null;
@@ -118,6 +154,7 @@ test "test basic world" {
     try std.testing.expectEqual(2, world.new());
 
     var a = ecs.Archetype{
+        .hash = 0,
         .id = 1,
     };
 
@@ -126,23 +163,23 @@ test "test basic world" {
     try std.testing.expect(storage.archetype != null);
     try std.testing.expectEqual(1, storage.archetype.?.id);
 
-    const entity = world.spawn(.{ Position, Speed });
+    const entity = try world.spawn(.{ Position, Speed });
 
-    _ = world.spawn(.{ Position{
+    _ = try world.spawn(.{ Position{
         .x = 10,
         .y = 20,
     }, Speed{
         .x = 1.2,
         .y = 1.2,
-    }});
+    } });
 
     try std.testing.expectEqual(3, entity);
 
-    world.add(entity, .{ Position{
+    try world.add(entity, .{ Position{
         .x = 10,
         .y = 20,
     }, Speed{
         .x = 1.2,
         .y = 1.2,
-    }});
+    } });
 }
