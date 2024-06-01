@@ -43,14 +43,29 @@ pub const World = struct {
     }
 
     pub fn deinit(self: *World) void {
-        //TODO need to free archetypes.
+        var iter = self.archetypes.iterator();
+
+        while(iter.next()) |archetypes| {
+            for(archetypes.value_ptr.items) |archetype| {
+                archetype.ids.deinit();
+                self.allocator.destroy(archetype);
+            }
+            archetypes.value_ptr.deinit();
+        }
         self.archetypes.deinit();
         self.entity_storage.deinit();
     }
 
     fn findOrCreateStorage(self: *World, entity: ecs.Entity) *EntityStorage {
         if (self.entity_storage.items.len <= entity) {
-            self.entity_storage.resize(@max((entity * 3) / 2, 1)) catch unreachable;
+            const old_len = self.entity_storage.items.len;
+            const new_len = @max((entity * 3) / 2, 1);
+            self.entity_storage.resize(new_len) catch unreachable;
+
+            for (old_len..new_len) |value| {
+                self.entity_storage.items[value].archetype = null;
+            }
+
         }
         return &self.entity_storage.items[entity];
     }
@@ -81,8 +96,25 @@ pub const World = struct {
         }
     }
 
-    fn findOrCreateArchetype(world: *World, ids: []skore.TypeId) !*ecs.Archetype {
-        const hash = ecs.archetype.makeArchetypeHash(ids);
+
+    fn createArchetype(world: *World, hash: u128, ids: []skore.TypeId) !*ecs.Archetype {
+
+        var archetype = try world.allocator.create(ecs.Archetype);
+        archetype.hash = hash;
+        archetype.id = world.archetypes.count();
+        archetype.ids = std.ArrayList(skore.TypeId).init(world.allocator);
+        try archetype.ids.insertSlice(0, ids);
+
+        const res = try world.archetypes.getOrPut(hash);
+        if (!res.found_existing) {
+            res.value_ptr.* = std.ArrayList(*ecs.Archetype).init(world.allocator);
+        }
+        try res.value_ptr.append(archetype);
+        return archetype;
+    }
+
+    export fn findOrCreateArchetype(world: *World, ids: [*]skore.TypeId, size : u32) *ecs.Archetype {
+        const hash = ecs.archetype.makeArchetypeHash(ids, size);
 
         if (world.archetypes.get(hash)) |archetype| {
             //TODO - check multiple archetypes with same id
@@ -93,22 +125,13 @@ pub const World = struct {
             return archetype.getLast();
         }
 
-        std.mem.sort(skore.TypeId, ids,{},std.sort.asc(skore.TypeId));
-
-        var archetype = try world.allocator.create(ecs.Archetype);
-        archetype.hash = hash;
-        archetype.id = world.archetypes.count();
-
-        const res = try world.archetypes.getOrPut(hash);
-        if (!res.found_existing) {
-            res.value_ptr.* = std.ArrayList(*ecs.Archetype).init(world.allocator);
+        var new_ids : [ecs.archetype_max_components]u128 = undefined;
+        for(0..size) |i| {
+            new_ids[i] = ids[i];
         }
+        std.mem.sort(skore.TypeId, new_ids[0..size], {}, std.sort.asc(skore.TypeId));
 
-        try res.value_ptr.append(archetype);
-
-
-        return archetype;
-
+        return world.createArchetype(hash, new_ids[0..size]) catch unreachable;
     }
 
     pub fn add(world: *World, entity: ecs.Entity, comptime types: anytype) !void {
@@ -119,12 +142,8 @@ pub const World = struct {
 
         var entity_storage = world.findOrCreateStorage(entity);
         if (entity_storage.archetype == null) {
-            entity_storage.archetype = try world.findOrCreateArchetype(&new_ids_1);
+            entity_storage.archetype = world.findOrCreateArchetype(&new_ids_1, new_ids_1.len);
         }
-
-        std.debug.print(" ids {d}", .{new_ids});
-
-        //findOrCreateArchetype(types);
     }
 
     pub fn spawn(self: *World, comptime types: anytype) !ecs.Entity {
@@ -153,10 +172,7 @@ test "test basic world" {
     try std.testing.expectEqual(1, world.new());
     try std.testing.expectEqual(2, world.new());
 
-    var a = ecs.Archetype{
-        .hash = 0,
-        .id = 1,
-    };
+    var a = ecs.Archetype{ .hash = 0, .id = 1, .ids = undefined };
 
     var storage = world.findOrCreateStorage(0);
     storage.archetype = &a;
