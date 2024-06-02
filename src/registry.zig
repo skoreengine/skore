@@ -5,7 +5,8 @@ pub const TypeId = u128;
 pub const TypeHandler = packed struct {
     ctx: *anyopaque = undefined,
     getName: *const fn () [:0]const u8 = undefined,
-    getTypeId: *const fn () TypeId = undefined,
+    getTypeId: *const fn (ctx: *anyopaque) TypeId = undefined,
+    getSize : *const fn (ctx: *anyopaque) usize = undefined,
     create: *const fn (ctx: *anyopaque, alloc: std.mem.Allocator) *anyopaque = undefined,
     init: *const fn (ctx: *anyopaque, alloc: std.mem.Allocator, ptr: *anyopaque) void = undefined,
     deinit: *const fn (ctx: *anyopaque, alloc: std.mem.Allocator, ptr: *anyopaque) void = undefined,
@@ -41,25 +42,31 @@ pub fn getTypeId(comptime t: type) TypeId {
 pub fn NativeTypeHandler(comptime T: type) type {
     return struct {
         const This = @This();
+        const type_id = getTypeId(T);
 
-        fn getName() [:0]const u8 {
+        fn initHandler(handler: *TypeHandler) void {
+            handler.getName = getNameFn;
+            handler.getTypeId = getTypeIdFn;
+            handler.getSize = getSizeImpl;
+            handler.create = createFn;
+            handler.init = initFn;
+            handler.deinit = deinitFn;
+            handler.destroy = destroyFn;
+        }
+
+        fn getNameFn() [:0]const u8 {
             return @typeName(T);
         }
 
-        fn getTypeIdImpl() TypeId {
-            return getTypeId(T);
+        fn getSizeImpl(_: *anyopaque) usize {
+            return @sizeOf(T);
         }
 
-        fn initHandler(handler: *TypeHandler) void {
-            handler.getName = getName;
-            handler.getTypeId = getTypeIdImpl;
-            handler.create = create;
-            handler.init = initFn;
-            handler.deinit = deinitFn;
-            handler.destroy = destroy;
+        fn getTypeIdFn(_: *anyopaque) TypeId {
+            return type_id;
         }
 
-        fn create(_: *anyopaque, alloc: std.mem.Allocator) *anyopaque {
+        fn createFn(_: *anyopaque, alloc: std.mem.Allocator) *anyopaque {
             return alloc.create(T) catch unreachable;
         }
 
@@ -83,7 +90,7 @@ pub fn NativeTypeHandler(comptime T: type) type {
             }
         }
 
-        fn destroy(_: *anyopaque, alloc: std.mem.Allocator, ptr: *anyopaque) void {
+        fn destroyFn(_: *anyopaque, alloc: std.mem.Allocator, ptr: *anyopaque) void {
             const value: *T = @alignCast(@ptrCast(ptr));
             alloc.destroy(value);
         }
@@ -218,7 +225,7 @@ test "test registry basics" {
 
     if (registry.findTypeByName(name)) |typeHandler| {
         try std.testing.expectEqualStrings(name, typeHandler.getName());
-        try std.testing.expect(typeHandler.getTypeId() != 0);
+        try std.testing.expect(typeHandler.getTypeId(typeHandler.ctx) != 0);
 
         const t = typeHandler.create(typeHandler.ctx, std.testing.allocator);
         typeHandler.init(typeHandler.ctx, std.testing.allocator, t);
