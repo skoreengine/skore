@@ -24,9 +24,17 @@ pub const ArchetypeType = struct {
 
 pub const ArchetypeChunk = [*]u8;
 
-pub inline fn getEntityCount(archetype: *Archetype, chunk :ArchetypeChunk) usize {
-    const size: *usize = @alignCast(@ptrCast(&chunk[archetype.entity_count_offset]));
-    return size.*;
+pub inline fn getEntityCount(archetype: *Archetype, chunk :ArchetypeChunk) *usize {
+    return @alignCast(@ptrCast(&chunk[archetype.entity_count_offset]));
+}
+
+pub inline fn getChunkEntity(archetype: *Archetype, chunk :ArchetypeChunk, index: usize) *skore.ecs.Entity {
+    return @alignCast(@ptrCast(&chunk[archetype.entity_array_offset + (index * @sizeOf(skore.ecs.Entity))]));
+}
+
+pub inline fn getChunkComponentData(archetype_type: ArchetypeType, chunk :ArchetypeChunk, index: usize) []u8 {
+    const index_data = archetype_type.data_offset + (index * archetype_type.type_size);
+    return chunk[index_data..archetype_type.type_size + index_data];
 }
 
 pub const Archetype = struct {
@@ -39,6 +47,7 @@ pub const Archetype = struct {
     entity_count_offset: usize = 0,
     chunk_state_offset: usize = 0,
     types: std.ArrayList(ArchetypeType) = undefined,
+    typeIndex  : std.AutoHashMap(u128, usize) = undefined,
     chunks: std.ArrayList(ArchetypeChunk) = undefined,
 };
 

@@ -11,6 +11,7 @@ pub const TypeHandler = packed struct {
     init: *const fn (ctx: *anyopaque, alloc: std.mem.Allocator, ptr: *anyopaque) void = undefined,
     deinit: *const fn (ctx: *anyopaque, alloc: std.mem.Allocator, ptr: *anyopaque) void = undefined,
     destroy: *const fn (ctx: *anyopaque, alloc: std.mem.Allocator, ptr: *anyopaque) void = undefined,
+    copy : * const fn(ctx: *anyopaque, alloc: std.mem.Allocator, desc: *anyopaque, origin: *anyopaque) void = undefined,
 };
 
 fn comptimeGetId(comptime t: type) TypeId {
@@ -52,6 +53,7 @@ pub fn NativeTypeHandler(comptime T: type) type {
             handler.init = initFn;
             handler.deinit = deinitFn;
             handler.destroy = destroyFn;
+            handler.copy = copyImpl;
         }
 
         fn getNameFn() [:0]const u8 {
@@ -93,6 +95,12 @@ pub fn NativeTypeHandler(comptime T: type) type {
         fn destroyFn(_: *anyopaque, alloc: std.mem.Allocator, ptr: *anyopaque) void {
             const value: *T = @alignCast(@ptrCast(ptr));
             alloc.destroy(value);
+        }
+
+        fn copyImpl(_: *anyopaque, _: std.mem.Allocator, desc: *anyopaque, origin: *anyopaque) void {
+            const origin_typ: *T = @alignCast(@ptrCast(origin));
+            const desc_typ: *T = @alignCast(@ptrCast(desc));
+            @memcpy(std.mem.asBytes(desc_typ), std.mem.asBytes(origin_typ));
         }
     };
 }
