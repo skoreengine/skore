@@ -22,15 +22,18 @@ pub const ArchetypeType = struct {
     state_offset: usize = 0,
 };
 
-pub const ArchetypeChunk = struct {
-    data: [:0]const u8,
-};
+pub const ArchetypeChunk = [*]u8;
+
+pub inline fn getEntityCount(archetype: *Archetype, chunk :ArchetypeChunk) usize {
+    const size: *usize = @alignCast(@ptrCast(&chunk[archetype.entity_count_offset]));
+    return size.*;
+}
 
 pub const Archetype = struct {
     id: u32,
     hash: u128,
     max_entity_chunk_count: usize = 0,
-    chunk_alloc_size: usize = 0,
+    chunk_total_alloc_size: usize = 0,
     chunk_data_size: usize = 0,
     entity_array_offset: usize = 0,
     entity_count_offset: usize = 0,

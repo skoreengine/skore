@@ -24,6 +24,7 @@ pub fn Query(comptime T: anytype) type {
 
 const EntityStorage = struct {
     archetype: ?*ecs.Archetype,
+    chunk : ?ecs.ArchetypeChunk
 };
 
 pub const World = struct {
@@ -49,6 +50,10 @@ pub const World = struct {
         while (iter.next()) |archetypes| {
             for (archetypes.value_ptr.items) |archetype| {
                 archetype.types.deinit();
+                for(archetype.chunks.items) |chunk| {
+                    self.allocator.rawFree(chunk[0..archetype.chunk_total_alloc_size], 1, 0);
+                }
+                archetype.chunks.deinit();
                 self.allocator.destroy(archetype);
             }
             archetypes.value_ptr.deinit();
@@ -103,7 +108,7 @@ pub const World = struct {
         var archetype = try world.allocator.create(ecs.Archetype);
         archetype.hash = hash;
         archetype.id = world.archetypes.count();
-        archetype.chunk_alloc_size = 0;
+        archetype.chunk_total_alloc_size = 0;
         archetype.chunk_data_size = 0;
         archetype.entity_array_offset = 0;
         archetype.entity_count_offset = 0;
@@ -127,25 +132,25 @@ pub const World = struct {
             }
 
             archetype.max_entity_chunk_count = @max(ecs.chunk_component_size / stride, 1);
-            archetype.chunk_alloc_size = archetype.max_entity_chunk_count * @sizeOf(ecs.Entity);
-            archetype.entity_count_offset = archetype.chunk_alloc_size;
-            archetype.chunk_alloc_size += @sizeOf(u32);
-            archetype.chunk_state_offset = archetype.chunk_alloc_size;
-            archetype.chunk_alloc_size += ids.len * @sizeOf(ecs.ComponentState);
-            archetype.chunk_data_size = archetype.chunk_alloc_size;
+            archetype.chunk_total_alloc_size = archetype.max_entity_chunk_count * @sizeOf(ecs.Entity);
+            archetype.entity_count_offset = archetype.chunk_total_alloc_size;
+            archetype.chunk_total_alloc_size += @sizeOf(u32);
+            archetype.chunk_state_offset = archetype.chunk_total_alloc_size;
+            archetype.chunk_total_alloc_size += ids.len * @sizeOf(ecs.ComponentState);
+            archetype.chunk_data_size = archetype.chunk_total_alloc_size;
 
             for (0..ids.len) |i| {
-                archetype.types.items[i].data_offset = archetype.chunk_alloc_size;
-                archetype.chunk_alloc_size += archetype.max_entity_chunk_count * archetype.types.items[i].type_size;
-                archetype.types.items[i].state_offset = archetype.chunk_alloc_size;
-                archetype.chunk_alloc_size += archetype.max_entity_chunk_count * @sizeOf(ecs.ComponentState);
+                archetype.types.items[i].data_offset = archetype.chunk_total_alloc_size;
+                archetype.chunk_total_alloc_size += archetype.max_entity_chunk_count * archetype.types.items[i].type_size;
+                archetype.types.items[i].state_offset = archetype.chunk_total_alloc_size;
+                archetype.chunk_total_alloc_size += archetype.max_entity_chunk_count * @sizeOf(ecs.ComponentState);
             }
         } else {
             //empty archetype.
             archetype.max_entity_chunk_count = ecs.chunk_component_size / @sizeOf(ecs.Entity);
-            archetype.chunk_alloc_size = archetype.max_entity_chunk_count * @sizeOf(ecs.Entity);
-            archetype.entity_count_offset = archetype.chunk_alloc_size;
-            archetype.chunk_alloc_size += @sizeOf(u32);
+            archetype.chunk_total_alloc_size = archetype.max_entity_chunk_count * @sizeOf(ecs.Entity);
+            archetype.entity_count_offset = archetype.chunk_total_alloc_size;
+            archetype.chunk_total_alloc_size += @sizeOf(u32);
         }
 
         const res = try world.archetypes.getOrPut(hash);
@@ -177,12 +182,37 @@ pub const World = struct {
         return world.createArchetype(hash, new_ids[0..size]) catch unreachable;
     }
 
+    fn findOrCreateChunk(world:* World, archetype_opt: ?*ecs.Archetype) ?ecs.ArchetypeChunk {
+        if (archetype_opt) |archetype| {
+            if (archetype.chunks.items.len > 0) {
+                const active_chunk = archetype.chunks.getLast();
+                if (archetype.max_entity_chunk_count > ecs.archetype.getEntityCount(archetype, active_chunk)) {
+                    return active_chunk;
+                }
+            }
+            const chunk_opt = world.allocator.rawAlloc(archetype.chunk_total_alloc_size, 1, 0);
+            if (chunk_opt) |chunk| {
+                archetype.chunks.append(chunk) catch undefined;
+            }
+            return chunk_opt;
+        }
+        return null;
+    }
+
     fn addWithIds(world: *World, entity: ecs.Entity, ids: [*]skore.TypeId, _: [*]const ?*anyopaque, size: u32) void {
         var entity_storage = world.findOrCreateStorage(entity);
         if (entity_storage.archetype == null) {
             entity_storage.archetype = world.findOrCreateArchetype(ids, size);
-        } else {}
+            entity_storage.chunk = world.findOrCreateChunk(entity_storage.archetype);
+        } else {
+
+        }
+
+
+
     }
+
+
 
     pub fn add(world: *World, entity: ecs.Entity, comptime types: anytype) void {
         const size = comptime getCompNum(types);
