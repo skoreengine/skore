@@ -29,15 +29,15 @@ pub const Archetype = struct {
     typeIndex  : std.AutoHashMap(u128, usize) = undefined,
     chunks: std.ArrayList(ArchetypeChunk) = undefined,
 
-    pub inline fn getEntityCount(archetype: *Archetype, chunk :ArchetypeChunk) *usize {
+    pub inline fn getEntityCount(archetype: * const Archetype, chunk :ArchetypeChunk) *usize {
         return @alignCast(@ptrCast(&chunk[archetype.entity_count_offset]));
     }
 
-    pub inline fn getChunkEntity(archetype: *Archetype, chunk :ArchetypeChunk, index: usize) *skore.ecs.Entity {
+    pub inline fn getChunkEntity(archetype: * const Archetype, chunk :ArchetypeChunk, index: usize) *skore.ecs.Entity {
         return @alignCast(@ptrCast(&chunk[archetype.entity_array_offset + (index * @sizeOf(skore.ecs.Entity))]));
     }
 
-    pub inline fn addEntityChunk(archetype: *Archetype, chunk :ArchetypeChunk, entity : skore.ecs.Entity) usize {
+    pub inline fn addEntityChunk(archetype: *const Archetype, chunk :ArchetypeChunk, entity : skore.ecs.Entity) usize {
         const entity_count = getEntityCount(archetype, chunk);
         const new_index = entity_count.*;
         entity_count.* += 1;

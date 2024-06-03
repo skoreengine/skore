@@ -40,28 +40,45 @@ pub fn QueryIter(comptime _: anytype) type {
 
         query_data: *QueryData,
         current_archetype_index: usize,
-        current_chunk: usize,
-        current_entity : usize,
+        current_chunk_index: usize,
+        current_entity_index: usize,
 
-        pub fn next(_: *This) ?*This {
-            return null;
+        pub fn next(iter: *This) ?*This {
+            while (true) {
 
-            // if (iter.query_data.archetypes.items.len <= iter.current_archetype_index) {
-            //     return null;
-            // }
-            //
-            // iter.current_entity += 1;
-            //
-            // return iter;
+                if (iter.query_data.archetypes.items.len <= iter.current_archetype_index) {
+                    return null;
+                }
+
+                const current_archetype = &iter.query_data.archetypes.items[iter.current_archetype_index];
+                const chunks = &current_archetype.archetype.chunks;
+
+                if (chunks.items.len > iter.current_chunk_index) {
+                    const current_chunk = chunks.items[iter.current_chunk_index];
+                    if (current_archetype.archetype.getEntityCount(current_chunk).* > iter.current_entity_index) {
+                        iter.current_entity_index +=1;
+                        return iter;
+                    } else {
+                        iter.current_chunk_index += 1;
+                        iter.current_entity_index = 0;
+                    }
+                } else {
+                    iter.current_archetype_index += 1;
+                    iter.current_entity_index = 0;
+                    iter.current_chunk_index = 0;
+                }
+            }
         }
 
-        pub fn get(_: This, comptime T: type) *const T {
-
+        pub fn getEntity(iter: This) ecs.Entity {
+            const current_archetype = iter.query_data.archetypes.items[iter.current_archetype_index].archetype;
+            const current_chunk = current_archetype.chunks.items[iter.current_chunk_index];
+            return current_archetype.getChunkEntity(current_chunk, iter.current_entity_index - 1).*;
         }
 
-        pub fn getMut(_: This, comptime T: type) *T {
+        pub fn get(_: This, comptime T: type) *const T {}
 
-        }
+        pub fn getMut(_: This, comptime T: type) *T {}
     };
 }
 
@@ -82,8 +99,8 @@ pub fn Query(comptime T: anytype) type {
             return QueryIter(T){
                 .query_data = self.query_data,
                 .current_archetype_index = 0,
-                .current_chunk = 0,
-                .current_entity = 0,
+                .current_chunk_index = 0,
+                .current_entity_index = 0,
             };
         }
     };

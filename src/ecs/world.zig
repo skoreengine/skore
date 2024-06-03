@@ -531,7 +531,8 @@ test "test basic query" {
     var iter = query.iter();
 
     while (iter.next()) |value| {
-        _ = value;
+
+        std.debug.print("entity {} ", .{value.getEntity()});
 
         // var pos = value.getMut(Position);
         // const speed = value.get(Speed);
