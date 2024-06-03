@@ -14,6 +14,7 @@ pub const World = struct {
     archetypes: ecs.ArchetypeHashMap,
     entity_storage: std.ArrayList(EntityStorage),
     entity_counter: ecs.Entity,
+    queries: ecs.query.QueryHashMap,
 
     pub fn init(registry: *skore.Registry, allocator: std.mem.Allocator) World {
         return .{
@@ -22,26 +23,41 @@ pub const World = struct {
             .archetypes = ecs.ArchetypeHashMap.init(allocator),
             .entity_storage = std.ArrayList(EntityStorage).init(allocator),
             .entity_counter = 1,
+            .queries = ecs.query.QueryHashMap.init(allocator),
         };
     }
 
     pub fn deinit(self: *World) void {
-        var iter = self.archetypes.iterator();
-
-        while (iter.next()) |archetypes| {
-            for (archetypes.value_ptr.items) |archetype| {
-                archetype.types.deinit();
-                for (archetype.chunks.items) |chunk| {
-                    self.allocator.rawFree(chunk[0..archetype.chunk_total_alloc_size], 1, 0);
+        {
+            var iter = self.archetypes.iterator();
+            while (iter.next()) |archetypes| {
+                for (archetypes.value_ptr.items) |archetype| {
+                    archetype.types.deinit();
+                    for (archetype.chunks.items) |chunk| {
+                        self.allocator.rawFree(chunk[0..archetype.chunk_total_alloc_size], 1, 0);
+                    }
+                    archetype.chunks.deinit();
+                    archetype.typeIndex.deinit();
+                    self.allocator.destroy(archetype);
                 }
-                archetype.chunks.deinit();
-                archetype.typeIndex.deinit();
-                self.allocator.destroy(archetype);
+                archetypes.value_ptr.deinit();
             }
-            archetypes.value_ptr.deinit();
         }
+        {
+            var iter = self.queries.iterator();
+            while (iter.next()) |query_arr| {
+                for (query_arr.value_ptr.items) |query_data| {
+                    query_data.types.deinit();
+                    query_data.archetypes.deinit();
+                    self.allocator.destroy(query_data);
+                }
+                query_arr.value_ptr.deinit();
+            }
+        }
+
         self.archetypes.deinit();
         self.entity_storage.deinit();
+        self.queries.deinit();
     }
 
     fn findOrCreateStorage(self: *World, entity: ecs.Entity) *EntityStorage {
@@ -125,7 +141,7 @@ pub const World = struct {
     }
 
     fn findOrCreateArchetype(world: *World, ids: [*]skore.TypeId, size: u32) *ecs.Archetype {
-        const hash = ecs.archetype.makeArchetypeHash(ids, size);
+        const hash = ecs.makeHash(ids, size);
 
         if (world.archetypes.get(hash)) |archetype| {
             //TODO - check multiple archetypes with same id
@@ -285,29 +301,13 @@ pub const World = struct {
         }
     }
 
-    fn getIds(types: anytype, ids: []skore.TypeId) void {
-        const struct_type = @typeInfo(@TypeOf(types));
-        const fields_info = struct_type.Struct.fields;
-        inline for (fields_info, 0..) |field, i| {
-            const field_type = @typeInfo(field.type);
-            if (field_type == .Type) {
-                if (field.default_value) |default_value| {
-                    const typ: *type = @ptrCast(@constCast(default_value));
-                    ids[i] = skore.registry.getTypeId(typ.*);
-                }
-            } else if (field_type == .Struct) {
-                ids[i] = skore.registry.getTypeId(field.type);
-            }
-        }
-    }
-
     pub fn add(world: *World, entity: ecs.Entity, types: anytype) void {
         const struct_type = @typeInfo(@TypeOf(types));
         const fields_info = struct_type.Struct.fields;
         const len = fields_info.len;
 
         var ids: [len]skore.TypeId = undefined;
-        getIds(types,&ids);
+        ecs.getIds(types, &ids);
         world.addComponentsToEntity(entity, &ids, len);
 
         const entity_storage = &world.entity_storage.items[entity];
@@ -316,7 +316,6 @@ pub const World = struct {
                 inline for (fields_info, 0..) |field, i| {
                     const id = ids[i];
                     if (archetype.typeIndex.get(id)) |index| {
-
                         const archetype_type = archetype.types.items[index];
                         const data = ecs.Archetype.getChunkComponentData(archetype_type, chunk, entity_storage.chunk_index);
 
@@ -355,7 +354,7 @@ pub const World = struct {
         const len = fields_info.len;
 
         var ids: [len]skore.TypeId = undefined;
-        getIds(types,&ids);
+        ecs.getIds(types, &ids);
         world.removeWithIds(entity, &ids, len);
     }
 
@@ -375,8 +374,57 @@ pub const World = struct {
         return world.get(T, entity) != null;
     }
 
-    pub fn query(_: *World, comptime T: anytype) ecs.Query(T) {
-        return ecs.Query(T){};
+    pub fn findOrCreateQueryData(world: *World, hash_id: skore.TypeId, ids: [*]const skore.TypeId, num: u32) *ecs.QueryData {
+        const res = world.queries.getOrPut(hash_id) catch undefined;
+        if (!res.found_existing) {
+            res.value_ptr.* = std.ArrayList(*ecs.QueryData).init(world.allocator);
+        }
+
+        if (res.value_ptr.items.len > 0) {
+            //just in case same hash has more then one type.
+            if (res.value_ptr.items.len > 1) {
+                for (0..res.value_ptr.items.len) |i| {
+                    const query_data = res.value_ptr.items[i];
+                    var found = true;
+                    if (query_data.types.items.len == num) {
+                        for (0..num) |type_index| {
+                            if (query_data.types.items[type_index] != ids[type_index]) {
+                                found = false;
+                                break;
+                            }
+                        }
+                    }
+                    if (found) {
+                        return query_data;
+                    }
+                }
+            } else {
+                return res.value_ptr.getLast();
+            }
+        }
+
+        var query_data = world.allocator.create(ecs.QueryData) catch undefined;
+        query_data.types = std.ArrayList(skore.TypeId).initCapacity(world.allocator, num) catch undefined;
+        query_data.archetypes = std.ArrayList(ecs.query.QueryArchetype).init(world.allocator);
+
+
+        var iter = world.archetypes.iterator();
+        while(iter.next()) |archetypes| {
+            for (0..archetypes.value_ptr.items.len) |value| {
+                query_data.checkArchetypes(world, archetypes.value_ptr.items[value]) catch undefined;
+            }
+        }
+
+        for (0..num) |i| {
+            query_data.types.append(ids[i]) catch undefined;
+        }
+        res.value_ptr.append(query_data) catch undefined;
+        return query_data;
+    }
+
+    pub fn query(world: *World, comptime T: anytype) ecs.Query(T) {
+        const QueryType = ecs.Query(T);
+        return .{ .query_data = findOrCreateQueryData(world, QueryType.hash, &QueryType.ids, QueryType.ids.len) };
     }
 };
 
@@ -475,12 +523,20 @@ test "test basic query" {
     var world = World.init(&registry, std.testing.allocator);
     defer world.deinit();
 
-    for (0..1) |i| {
-        _ = world.spawn(.{Position{ .x = @floatFromInt(i), .y = @floatFromInt(i * 2) }, Speed{ .x = 2, .y = 2 }});
+    for (0..100) |i| {
+        _ = world.spawn(.{ Position{ .x = @floatFromInt(i), .y = @floatFromInt(i * 2) }, Speed{ .x = 2, .y = 2 } });
     }
 
-    // var query = world.query(.{ Position, Speed });
-    // var iter = query.iter();
-    //
-    // while (iter.next()) |_| {}
+    var query = world.query(.{ Position, Speed });
+    var iter = query.iter();
+
+    while (iter.next()) |value| {
+        _ = value;
+
+        // var pos = value.getMut(Position);
+        // const speed = value.get(Speed);
+        //
+        // pos.x += speed.x;
+        // pos.y += speed.y;
+    }
 }
