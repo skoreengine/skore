@@ -15,7 +15,7 @@ pub const ComponentState = struct {
 };
 
 pub const ArchetypeType = struct {
-    id: skore.TypeId,
+    type_id: skore.TypeId,
     type_handler: *skore.TypeHandler,
     type_size: usize = 0,
     data_offset: usize = 0,
