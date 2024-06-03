@@ -24,19 +24,6 @@ pub const ArchetypeType = struct {
 
 pub const ArchetypeChunk = [*]u8;
 
-pub inline fn getEntityCount(archetype: *Archetype, chunk :ArchetypeChunk) *usize {
-    return @alignCast(@ptrCast(&chunk[archetype.entity_count_offset]));
-}
-
-pub inline fn getChunkEntity(archetype: *Archetype, chunk :ArchetypeChunk, index: usize) *skore.ecs.Entity {
-    return @alignCast(@ptrCast(&chunk[archetype.entity_array_offset + (index * @sizeOf(skore.ecs.Entity))]));
-}
-
-pub inline fn getChunkComponentData(archetype_type: ArchetypeType, chunk :ArchetypeChunk, index: usize) []u8 {
-    const index_data = archetype_type.data_offset + (index * archetype_type.type_size);
-    return chunk[index_data..archetype_type.type_size + index_data];
-}
-
 pub const Archetype = struct {
     id: u32,
     hash: u128,
@@ -49,6 +36,27 @@ pub const Archetype = struct {
     types: std.ArrayList(ArchetypeType) = undefined,
     typeIndex  : std.AutoHashMap(u128, usize) = undefined,
     chunks: std.ArrayList(ArchetypeChunk) = undefined,
+
+    pub inline fn getEntityCount(archetype: *Archetype, chunk :ArchetypeChunk) *usize {
+        return @alignCast(@ptrCast(&chunk[archetype.entity_count_offset]));
+    }
+
+    pub inline fn getChunkEntity(archetype: *Archetype, chunk :ArchetypeChunk, index: usize) *skore.ecs.Entity {
+        return @alignCast(@ptrCast(&chunk[archetype.entity_array_offset + (index * @sizeOf(skore.ecs.Entity))]));
+    }
+
+    pub inline fn addEntityChunk(archetype: *Archetype, chunk :ArchetypeChunk, entity : skore.ecs.Entity) usize {
+        const entity_count = getEntityCount(archetype, chunk);
+        const new_index = entity_count.*;
+        entity_count.* += 1;
+        archetype.getChunkEntity(chunk, new_index).* = entity;
+        return new_index;
+    }
+
+    pub inline fn getChunkComponentData(archetype_type: ArchetypeType, chunk :ArchetypeChunk, index: usize) []u8 {
+        const index_data = archetype_type.data_offset + (index * archetype_type.type_size);
+        return chunk[index_data..archetype_type.type_size + index_data];
+    }
 };
 
 pub const ArchetypeHashMap = std.AutoHashMap(u128, std.ArrayList(*Archetype));

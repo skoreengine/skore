@@ -169,7 +169,7 @@ pub const World = struct {
         if (archetype_opt) |archetype| {
             if (archetype.chunks.items.len > 0) {
                 const active_chunk = archetype.chunks.getLast();
-                if (archetype.max_entity_chunk_count > ecs.archetype.getEntityCount(archetype, active_chunk).*) {
+                if (archetype.max_entity_chunk_count > archetype.getEntityCount(active_chunk).*) {
                     return active_chunk;
                 }
             }
@@ -185,20 +185,20 @@ pub const World = struct {
         return null;
     }
 
-    fn removeEntityFromChunk(world: *World, entity : ecs.Entity, entity_storage: *EntityStorage) void {
+    fn removeEntityFromChunk(world: *World, entity: ecs.Entity, entity_storage: *EntityStorage) void {
         if (entity_storage.archetype) |archetype| {
             //move last entity from active chunk to the current position
             if (archetype.chunks.getLastOrNull()) |active_chunk| {
                 if (entity_storage.chunk) |chunk| {
-                    const entity_count = ecs.archetype.getEntityCount(archetype, active_chunk);
-                    const last_index =  entity_count.* - 1;
-                    const last_entity = ecs.archetype.getChunkEntity(archetype, active_chunk, last_index).*;
-                    const chunk_entity = ecs.archetype.getChunkEntity(archetype, chunk, entity_storage.chunk_index);
+                    const entity_count = archetype.getEntityCount(active_chunk);
+                    const last_index = entity_count.* - 1;
+                    const last_entity = archetype.getChunkEntity(active_chunk, last_index).*;
+                    const chunk_entity = archetype.getChunkEntity(chunk, entity_storage.chunk_index);
 
                     if (last_entity != entity) {
-                        for(archetype.types.items) |archetype_type| {
-                            const src = ecs.archetype.getChunkComponentData(archetype_type, active_chunk, last_index);
-                            const dst = ecs.archetype.getChunkComponentData(archetype_type, chunk, entity_storage.chunk_index);
+                        for (archetype.types.items) |archetype_type| {
+                            const src = ecs.Archetype.getChunkComponentData(archetype_type, active_chunk, last_index);
+                            const dst = ecs.Archetype.getChunkComponentData(archetype_type, chunk, entity_storage.chunk_index);
 
                             if (archetype_type.type_handler.copy != undefined) {
                                 archetype_type.type_handler.copy(archetype_type.type_handler.ctx, world.allocator, dst.ptr, src.ptr);
@@ -216,17 +216,40 @@ pub const World = struct {
                     entity_count.* = entity_count.* - 1;
                     if (entity_count.* == 0) {
                         world.allocator.rawFree(chunk[0..archetype.chunk_total_alloc_size], 1, 0);
-                        _= archetype.chunks.popOrNull();
+                        _ = archetype.chunks.popOrNull();
                     }
                 }
             }
         }
     }
 
-    fn moveEntityArchetype(entity: ecs.Entity, entity_storage: *EntityStorage, archetype : *ecs.Archetype) void {
-        _ = entity;
-        _ = entity_storage;
-        _ = archetype;
+    fn moveEntityArchetype(world: *World, entity: ecs.Entity, entity_storage: *EntityStorage, new_archetype: *ecs.Archetype) void {
+        if (entity_storage.archetype) |old_archetype| {
+            if (old_archetype == new_archetype) return;
+            if (entity_storage.chunk) |old_chunk| {
+                if (world.findOrCreateChunk(new_archetype)) |new_chunk| {
+                    const new_index = new_archetype.addEntityChunk(new_chunk, entity);
+                    for (old_archetype.types.items) |archetype_type| {
+                        const src = ecs.Archetype.getChunkComponentData(archetype_type, old_chunk, entity_storage.chunk_index);
+
+                        if (new_archetype.typeIndex.get(archetype_type.type_id)) |new_type_index| {
+                            const new_archetype_type = new_archetype.types.items[new_type_index];
+                            const dst = ecs.Archetype.getChunkComponentData(new_archetype_type, new_chunk, new_index);
+                            @memcpy(dst, src);
+                            //destType.sparse->Emplace(entity, src);
+                        } else {
+                            //type.sparse->Remove(entity);
+                        }
+                    }
+
+                    world.removeEntityFromChunk(entity, entity_storage);
+
+                    entity_storage.chunk_index = new_index;
+                    entity_storage.chunk = new_chunk;
+                    entity_storage.archetype = new_archetype;
+                }
+            }
+        }
     }
 
     fn addWithIds(world: *World, entity: ecs.Entity, ids: [*]skore.TypeId, components: [*]const ?*anyopaque, size: u32) void {
@@ -234,22 +257,20 @@ pub const World = struct {
         if (entity_storage.archetype == null) {
             entity_storage.archetype = world.findOrCreateArchetype(ids, size);
             entity_storage.chunk = world.findOrCreateChunk(entity_storage.archetype);
-            const entity_count = ecs.archetype.getEntityCount(entity_storage.archetype.?, entity_storage.chunk.?);
-            entity_storage.chunk_index = entity_count.*;
-            entity_count.* = entity_count.* + 1;
-            ecs.archetype.getChunkEntity(entity_storage.archetype.?, entity_storage.chunk.?, entity_storage.chunk_index).* = entity;
+            entity_storage.chunk_index = entity_storage.archetype.?.addEntityChunk(entity_storage.chunk.?, entity);
         } else if (entity_storage.archetype) |archetype| {
-            var arr : [ecs.archetype_max_components]skore.TypeId = undefined;
-            var i : u32 = 0;
-            for(archetype.types.items) |archetype_type| {
+            var arr: [ecs.archetype_max_components]skore.TypeId = undefined;
+            var i: u32 = 0;
+
+            for (archetype.types.items) |archetype_type| {
                 arr[i] = archetype_type.type_id;
-                i += i;
+                i += 1;
             }
-            for(0..size) |i_id| {
+            for (0..size) |i_id| {
                 arr[i] = ids[i_id];
-                i += i;
+                i += 1;
             }
-            moveEntityArchetype(entity, entity_storage, world.findOrCreateArchetype(&arr, i));
+            world.moveEntityArchetype(entity, entity_storage, world.findOrCreateArchetype(&arr, i));
         }
 
         if (entity_storage.archetype) |archetype| {
@@ -258,7 +279,7 @@ pub const World = struct {
                     const id = ids[i];
                     if (archetype.typeIndex.get(id)) |index| {
                         const archetype_type = archetype.types.items[index];
-                        const data = ecs.archetype.getChunkComponentData(archetype_type, chunk, entity_storage.chunk_index);
+                        const data = ecs.Archetype.getChunkComponentData(archetype_type, chunk, entity_storage.chunk_index);
                         if (components[i]) |comp_data| {
                             if (archetype_type.type_handler.copy != undefined) {
                                 archetype_type.type_handler.copy(archetype_type.type_handler.ctx, world.allocator, data.ptr, comp_data);
@@ -328,7 +349,7 @@ pub const World = struct {
         if (entity_storage.archetype) |archetype| {
             if (entity_storage.chunk) |chunk| {
                 if (archetype.typeIndex.get(skore.registry.getTypeId(T))) |index| {
-                    return @alignCast(@ptrCast(ecs.archetype.getChunkComponentData(archetype.types.items[index], chunk, entity_storage.chunk_index)));
+                    return @alignCast(@ptrCast(ecs.Archetype.getChunkComponentData(archetype.types.items[index], chunk, entity_storage.chunk_index)));
                 }
             }
         }
@@ -396,8 +417,31 @@ test "test basic world" {
         return error.TestExpectedEqual;
     }
 
-    const entityThree = world.spawn(.{AnotherComp{ .t = false }});
+    const entityThree = world.spawn(.{Position{ .x = 100, .y = 200  }});
     try std.testing.expect(world.findOrCreateStorage(entityThree).archetype != world.findOrCreateStorage(entityTwo).archetype);
 
-    //world.add(entity, .{ Position{ .x = 10, .y = 20 }, Speed{ .x = 1.2, .y = 1.2 } });
+    try std.testing.expect(!world.has(AnotherComp, entityThree));
+    try std.testing.expect(!world.has(Speed, entityThree));
+
+    world.add(entityThree, .{ AnotherComp{ .t = true }, Speed{ .x = 1.5, .y = 1.7 } });
+
+    try std.testing.expect(world.has(Position, entityThree));
+    try std.testing.expect(world.has(AnotherComp, entityThree));
+    try std.testing.expect(world.has(Speed, entityThree));
+
+    if (world.get(Position, entityThree)) |position| {
+        try std.testing.expectEqual(100, position.x);
+        try std.testing.expectEqual(200, position.y);
+    }
+
+    if (world.get(Speed, entityThree)) |speed| {
+        try std.testing.expectEqual(1.5, speed.x);
+        try std.testing.expectEqual(1.7, speed.y);
+    }
+
+    if (world.get(AnotherComp, entityThree)) |another_comp| {
+        try std.testing.expectEqual(true, another_comp.t);
+    }
+
+
 }
