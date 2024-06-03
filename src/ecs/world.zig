@@ -293,12 +293,43 @@ pub const World = struct {
         }
     }
 
+    fn removeWithIds(world: *World, entity: ecs.Entity, ids: [*]skore.TypeId, size: u32) void {
+        const entity_storage = &world.entity_storage.items[entity];
+
+        if (entity_storage.archetype) |archetype| {
+            var arr: [ecs.archetype_max_components]skore.TypeId = undefined;
+            var arr_size: u32 = 0;
+
+            for (archetype.types.items) |archetype_type| {
+                var found = false;
+                for (0..size) |i| {
+                    if (ids[i] == archetype_type.type_id) {
+                        found = true;
+                        break;
+                    }
+                }
+                //not found on list to remove (ids). keep it
+                if (!found) {
+                    arr[arr_size] = archetype_type.type_id;
+                    arr_size += 1;
+                }
+            }
+
+            //same len, so no type found to remove
+            if (arr_size == archetype.types.items.len) {
+                return;
+            }
+
+            world.moveEntityArchetype(entity, entity_storage, world.findOrCreateArchetype(&arr, arr_size));
+        }
+    }
+
     fn getCompNum(comptime types: anytype) usize {
         const struct_type = @typeInfo(@TypeOf(types));
         return struct_type.Struct.fields.len;
     }
 
-    fn getComps(comptime types: anytype, comptime ids: []skore.TypeId, comptime components: []?*anyopaque) void {
+    fn getComps(comptime types: anytype, comptime ids: []skore.TypeId, comptime components_opt: ?[]?*anyopaque) void {
         const struct_type = @typeInfo(@TypeOf(types));
         for (struct_type.Struct.fields, 0..) |field, i| {
             const field_type = @typeInfo(field.type);
@@ -306,12 +337,16 @@ pub const World = struct {
                 if (field.default_value) |default_value| {
                     const typ: *type = @ptrCast(@constCast(default_value));
                     ids[i] = skore.registry.getTypeId(typ.*);
-                    components[i] = null;
+                    if (components_opt) |components| {
+                        components[i] = null;
+                    }
                 }
             } else if (field_type == .Struct) {
                 ids[i] = skore.registry.getTypeId(field.type);
                 if (field.default_value) |default_value| {
-                    components[i] = @constCast(default_value);
+                    if (components_opt) |components| {
+                        components[i] = @constCast(default_value);
+                    }
                 }
             }
         }
@@ -342,6 +377,14 @@ pub const World = struct {
             entity_storage.chunk = null;
             entity_storage.archetype = null;
         }
+    }
+
+    pub fn remove(world: *World, comptime types: anytype, entity: ecs.Entity) void {
+        const size = comptime getCompNum(types);
+        comptime var new_ids: [size]skore.TypeId = undefined;
+        comptime getComps(types, &new_ids, null);
+        var runtime_ids = new_ids;
+        world.removeWithIds(entity, &runtime_ids, size);
     }
 
     pub fn get(world: *World, comptime T: type, entity: ecs.Entity) ?*const T {
@@ -417,7 +460,7 @@ test "test basic world" {
         return error.TestExpectedEqual;
     }
 
-    const entityThree = world.spawn(.{Position{ .x = 100, .y = 200  }});
+    const entityThree = world.spawn(.{Position{ .x = 100, .y = 200 }});
     try std.testing.expect(world.findOrCreateStorage(entityThree).archetype != world.findOrCreateStorage(entityTwo).archetype);
 
     try std.testing.expect(!world.has(AnotherComp, entityThree));
@@ -425,6 +468,7 @@ test "test basic world" {
 
     world.add(entityThree, .{ AnotherComp{ .t = true }, Speed{ .x = 1.5, .y = 1.7 } });
 
+    try std.testing.expect(world.findOrCreateStorage(entityThree).archetype != world.findOrCreateStorage(entityTwo).archetype);
     try std.testing.expect(world.has(Position, entityThree));
     try std.testing.expect(world.has(AnotherComp, entityThree));
     try std.testing.expect(world.has(Speed, entityThree));
@@ -443,5 +487,8 @@ test "test basic world" {
         try std.testing.expectEqual(true, another_comp.t);
     }
 
+    world.remove(.{AnotherComp}, entityThree);
 
+    //check if backs to the same archetype with Position/Speed
+    try std.testing.expect(world.findOrCreateStorage(entityThree).archetype == world.findOrCreateStorage(entityTwo).archetype);
 }
