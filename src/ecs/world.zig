@@ -132,8 +132,8 @@ pub const World = struct {
         }
 
         var it = world.queries.iterator();
-        while(it.next()) |queries| {
-            for(queries.value_ptr.items) |query_it| {
+        while (it.next()) |queries| {
+            for (queries.value_ptr.items) |query_it| {
                 try query_it.checkArchetypes(world, archetype);
             }
         }
@@ -186,7 +186,6 @@ pub const World = struct {
         }
 
         return error.ChunkCannotBeCreated;
-
     }
 
     fn removeEntityFromChunk(world: *World, entity: ecs.Entity, entity_storage: *EntityStorage) void {
@@ -382,8 +381,8 @@ pub const World = struct {
         return world.get(T, entity) != null;
     }
 
-    pub fn findOrCreateQueryData(world: *World, hash_id: skore.TypeId, ids: [*]const skore.TypeId, num: u32) *ecs.QueryData {
-        const res = world.queries.getOrPut(hash_id) catch undefined;
+    pub fn findOrCreateQueryData(world: *World, hash_id: skore.TypeId, ids: [*]const skore.TypeId, num: u32) !*ecs.QueryData {
+        const res = try world.queries.getOrPut(hash_id);
         if (!res.found_existing) {
             res.value_ptr.* = std.ArrayList(*ecs.QueryData).init(world.allocator);
         }
@@ -430,9 +429,9 @@ pub const World = struct {
         return query_data;
     }
 
-    pub fn query(world: *World, comptime T: anytype) ecs.Query(T) {
+    pub fn query(world: *World, comptime T: anytype) !ecs.Query(T) {
         const QueryType = ecs.Query(T);
-        return .{ .query_data = findOrCreateQueryData(world, QueryType.hash, &QueryType.ids, QueryType.ids.len) };
+        return .{ .query_data = try findOrCreateQueryData(world, QueryType.hash, &QueryType.ids, QueryType.ids.len) };
     }
 };
 
@@ -526,7 +525,7 @@ test "test basic world" {
     try world.remove(.{AnotherComp}, entity_three);
 
     //check if backs to the same archetype with Position/Speed
-    try std.testing.expect( (try world.findOrCreateStorage(entity_three)).archetype == (try world.findOrCreateStorage(entity_two)).archetype);
+    try std.testing.expect((try world.findOrCreateStorage(entity_three)).archetype == (try world.findOrCreateStorage(entity_two)).archetype);
 }
 
 test "test basic query" {
@@ -545,15 +544,15 @@ test "test basic query" {
     }
 
     {
-        var query = world.query(.{ Position, Speed });
+        var query = try world.query(.{ Position, Speed });
         var iter = query.iter();
 
         var sum: u32 = 0;
 
         while (iter.next()) |row| {
             const pos = row.get(Position);
-            const x_int :u32 = @intFromFloat(pos.x);
-            const y_int :u32 = @intFromFloat(pos.y);
+            const x_int: u32 = @intFromFloat(pos.x);
+            const y_int: u32 = @intFromFloat(pos.y);
 
             try std.testing.expect(row.getEntity() != 0);
             try std.testing.expectEqual(x_int, sum);
@@ -565,7 +564,7 @@ test "test basic query" {
 
     {
         {
-            var query = world.query(.{ AnotherComp });
+            var query = try world.query(.{AnotherComp});
 
             for (0..5) |_| {
                 _ = try world.create(.{ AnotherComp{
@@ -586,7 +585,6 @@ test "test basic query" {
 
                 const another_comp = row.get(AnotherComp);
                 try std.testing.expect(another_comp.t);
-
             }
             try std.testing.expectEqual(5, sum);
         }
@@ -595,33 +593,42 @@ test "test basic query" {
     {
         var sum: u32 = 0;
 
-        var query = world.query(.{Speed});
+        var query = try world.query(.{Speed});
         var iter = query.iter();
 
-        while(iter.next()) |_| {
-            sum +=1;
+        while (iter.next()) |_| {
+            sum += 1;
         }
 
         try std.testing.expectEqual(45, sum);
-
     }
 }
 
+const TestCompOne = struct { i: u32 = 0 };
+const TestCompTwo = struct { j: u32 = 0 };
 
-test "ecs complete"{
-
+test "ecs complete" {
     var registry = skore.Registry.init(std.testing.allocator);
     defer registry.deinit();
 
-    registry.add(Position);
-    registry.add(Speed);
+    registry.add(TestCompOne);
+    registry.add(TestCompTwo);
 
     var world = World.init(&registry, std.testing.allocator);
     defer world.deinit();
 
-    for (0..10) |_| {
-        _ = try world.create(.{Position, Speed});
+    for (0..10) |i| {
+        _ = try world.create(.{
+            TestCompOne{ .i = @intCast(i)},
+            TestCompTwo{ .j = @as(u32, @intCast(i)) * 2}
+        });
     }
 
-
+    const query = try world.query(.{TestCompOne, TestCompTwo});
+    var iter = query.iter();
+    while (iter.next()) |item| {
+        const comp_one = item.get(TestCompOne);
+        const comp_two = item.get(TestCompTwo);
+        try std.testing.expectEqual(comp_one.i * 2, comp_two.j);
+    }
 }

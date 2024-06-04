@@ -127,7 +127,7 @@ pub fn Query(comptime T: anytype) type {
 
         query_data: *QueryData,
 
-        pub fn iter(self: *This) QueryIter(T) {
+        pub fn iter(self: *const This) QueryIter(T) {
             return QueryIter(T){
                 .query_data = self.query_data,
                 .current_archetype_index = 0,
