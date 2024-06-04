@@ -47,8 +47,7 @@ pub const World = struct {
             var iter = self.queries.iterator();
             while (iter.next()) |query_arr| {
                 for (query_arr.value_ptr.items) |query_data| {
-                    query_data.types.deinit();
-                    query_data.archetypes.deinit();
+                    query_data.deinit();
                     self.allocator.destroy(query_data);
                 }
                 query_arr.value_ptr.deinit();
@@ -130,6 +129,13 @@ pub const World = struct {
             archetype.chunk_total_alloc_size = archetype.max_entity_chunk_count * @sizeOf(ecs.Entity);
             archetype.entity_count_offset = archetype.chunk_total_alloc_size;
             archetype.chunk_total_alloc_size += @sizeOf(u32);
+        }
+
+        var it = world.queries.iterator();
+        while(it.next()) |queries| {
+            for(queries.value_ptr.items) |query_it| {
+                try query_it.checkArchetypes(world, archetype);
+            }
         }
 
         const res = try world.archetypes.getOrPut(hash);
@@ -407,17 +413,17 @@ pub const World = struct {
         query_data.types = std.ArrayList(skore.TypeId).initCapacity(world.allocator, num) catch undefined;
         query_data.archetypes = std.ArrayList(ecs.query.QueryArchetype).init(world.allocator);
 
+        for (0..num) |i| {
+            query_data.types.append(ids[i]) catch undefined;
+        }
 
         var iter = world.archetypes.iterator();
-        while(iter.next()) |archetypes| {
+        while (iter.next()) |archetypes| {
             for (0..archetypes.value_ptr.items.len) |value| {
                 query_data.checkArchetypes(world, archetypes.value_ptr.items[value]) catch undefined;
             }
         }
 
-        for (0..num) |i| {
-            query_data.types.append(ids[i]) catch undefined;
-        }
         res.value_ptr.append(query_data) catch undefined;
         return query_data;
     }
@@ -519,25 +525,76 @@ test "test basic query" {
 
     registry.add(Position);
     registry.add(Speed);
+    registry.add(AnotherComp);
 
     var world = World.init(&registry, std.testing.allocator);
     defer world.deinit();
 
-    for (0..100) |i| {
+    for (0..40) |i| {
         _ = world.spawn(.{ Position{ .x = @floatFromInt(i), .y = @floatFromInt(i * 2) }, Speed{ .x = 2, .y = 2 } });
     }
 
-    var query = world.query(.{ Position, Speed });
-    var iter = query.iter();
+    {
+        var query = world.query(.{ Position, Speed });
+        var iter = query.iter();
 
-    while (iter.next()) |value| {
+        var sum: u32 = 0;
 
-        std.debug.print("entity {} ", .{value.getEntity()});
+        while (iter.next()) |row| {
+            const pos = row.get(Position);
+            const x_int :u32 = @intFromFloat(pos.x);
+            const y_int :u32 = @intFromFloat(pos.y);
 
-        // var pos = value.getMut(Position);
-        // const speed = value.get(Speed);
-        //
-        // pos.x += speed.x;
-        // pos.y += speed.y;
+            try std.testing.expect(row.getEntity() != 0);
+            try std.testing.expectEqual(x_int, sum);
+            try std.testing.expectEqual(y_int, sum * 2);
+            sum += 1;
+        }
+        try std.testing.expectEqual(40, sum);
     }
+
+    {
+        {
+            var query = world.query(.{ AnotherComp });
+
+            for (0..5) |_| {
+                _ = world.spawn(.{ AnotherComp{
+                    .t = true,
+                }, Speed{
+                    .x = 2,
+                    .y = 2,
+                } });
+            }
+
+            var iter = query.iter();
+
+            var sum: u32 = 0;
+
+            while (iter.next()) |row| {
+                try std.testing.expect(row.getEntity() != 0);
+                sum += 1;
+
+                const another_comp = row.get(AnotherComp);
+                try std.testing.expect(another_comp.t);
+
+            }
+            try std.testing.expectEqual(5, sum);
+        }
+    }
+
+    {
+        var sum: u32 = 0;
+
+        var query = world.query(.{Speed});
+        var iter = query.iter();
+
+        while(iter.next()) |_| {
+            sum +=1;
+        }
+
+        try std.testing.expectEqual(45, sum);
+
+    }
+
+
 }

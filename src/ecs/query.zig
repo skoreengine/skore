@@ -30,11 +30,19 @@ pub const QueryData = struct {
 
         try query_data.archetypes.append(query_archetype);
     }
+
+    pub fn deinit(query_data: *QueryData) void {
+        for (query_data.archetypes.items) |archetype_type| {
+            archetype_type.indices.deinit();
+        }
+        query_data.types.deinit();
+        query_data.archetypes.deinit();
+    }
 };
 
 pub const QueryHashMap = std.AutoHashMap(skore.TypeId, std.ArrayList(*QueryData));
 
-pub fn QueryIter(comptime _: anytype) type {
+pub fn QueryIter(comptime Types: anytype) type {
     return struct {
         const This = @This();
 
@@ -45,7 +53,6 @@ pub fn QueryIter(comptime _: anytype) type {
 
         pub fn next(iter: *This) ?*This {
             while (true) {
-
                 if (iter.query_data.archetypes.items.len <= iter.current_archetype_index) {
                     return null;
                 }
@@ -56,7 +63,7 @@ pub fn QueryIter(comptime _: anytype) type {
                 if (chunks.items.len > iter.current_chunk_index) {
                     const current_chunk = chunks.items[iter.current_chunk_index];
                     if (current_archetype.archetype.getEntityCount(current_chunk).* > iter.current_entity_index) {
-                        iter.current_entity_index +=1;
+                        iter.current_entity_index += 1;
                         return iter;
                     } else {
                         iter.current_chunk_index += 1;
@@ -70,15 +77,40 @@ pub fn QueryIter(comptime _: anytype) type {
             }
         }
 
-        pub fn getEntity(iter: This) ecs.Entity {
+        inline fn compIndex(comptime T: type) usize {
+            const struct_type = @typeInfo(@TypeOf(Types));
+            const fields_info = struct_type.Struct.fields;
+            inline for (fields_info, 0..) |field, i| {
+                const field_type = @typeInfo(field.type);
+                if (field_type == .Type) {
+                    if (field.default_value) |default_value| {
+                        const typ: *type = @ptrCast(@constCast(default_value));
+                        if (typ.* == T) {
+                            return i;
+                        }
+                    }
+                }
+            }
+            @compileError("no index found for type");
+        }
+
+        pub inline fn getEntity(iter: This) ecs.Entity {
             const current_archetype = iter.query_data.archetypes.items[iter.current_archetype_index].archetype;
             const current_chunk = current_archetype.chunks.items[iter.current_chunk_index];
             return current_archetype.getChunkEntity(current_chunk, iter.current_entity_index - 1).*;
         }
 
-        pub fn get(_: This, comptime T: type) *const T {}
+        pub inline fn get(iter: This, comptime T: type) *const T {
+            const index = comptime compIndex(T);
+            const current_archetype = iter.query_data.archetypes.items[iter.current_archetype_index];
+            const current_chunk = current_archetype.archetype.chunks.items[iter.current_chunk_index];
+            const archetype_type_index = current_archetype.indices.items[index];
+            return @alignCast(@ptrCast(ecs.Archetype.getChunkComponentData(current_archetype.archetype.types.items[archetype_type_index], current_chunk, iter.current_entity_index - 1).ptr));
+        }
 
-        pub fn getMut(_: This, comptime T: type) *T {}
+        pub fn getMut(_: This, comptime T: type) *T {
+
+        }
     };
 }
 
