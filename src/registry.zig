@@ -160,7 +160,8 @@ pub const Registry = struct {
         res_by_name.value_ptr.append(type_handler) catch return;
         res_by_id.value_ptr.append(type_handler) catch return;
 
-        std.debug.print("type {s} added \n", .{name});
+        //TODO - replace with a proper log.
+        //std.debug.print("type {s} added \n", .{name});
     }
 
     pub fn add(self: *Registry, T: type) void {
@@ -186,6 +187,10 @@ pub const Registry = struct {
         } else {
             return null;
         }
+    }
+
+    pub fn findType(self: *Registry, comptime T : type) ?*TypeHandler {
+        return self.findTypeById(getTypeId(T));
     }
 };
 
