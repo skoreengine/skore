@@ -1,21 +1,13 @@
 const std = @import("std");
-const repo = @import("repository.zig");
+const Repository = @import("Repository.zig");
+const RID = @import("RID.zig");
 
-pub const RIDIndex = extern struct {
-    offset: u32,
-    page: u32,
-};
-
-pub const RID = extern union {
-    index: RIDIndex,
-    id: u64,
-};
 
 pub fn Field(comptime T: type) type {
     return struct {
         const This = @This();
 
-        pub fn get(_: *This) ?T {
+        pub fn get(_: *This) ?*const T {
             return null;
         }
 
@@ -24,12 +16,11 @@ pub fn Field(comptime T: type) type {
 }
 
 pub const SubobjectList = struct {
-
-    pub fn append(_: *SubobjectList, _: RID) void {
-
-    }
+    pub fn append(_: *SubobjectList, _: RID) void {}
 };
 
 test {
-    _ = repo;
+    _ = Repository;
+    _ = RID;
 }
+

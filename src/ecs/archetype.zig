@@ -26,7 +26,7 @@ pub const Archetype = struct {
     entity_count_offset: usize = 0,
     chunk_state_offset: usize = 0,
     types: std.ArrayList(ArchetypeType) = undefined,
-    typeIndex  : std.AutoHashMap(u128, usize) = undefined,
+    type_index  : std.AutoHashMap(skore.TypeId, usize) = undefined,
     chunks: std.ArrayList(ArchetypeChunk) = undefined,
 
     pub inline fn getEntityCount(archetype: * const Archetype, chunk :ArchetypeChunk) *usize {

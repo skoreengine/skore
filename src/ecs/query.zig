@@ -11,7 +11,7 @@ pub const QueryData = struct {
 
     pub fn checkArchetypes(query_data: *QueryData, world: *ecs.World, archetype: *ecs.Archetype) !void {
         for (query_data.types.items) |type_id| {
-            const opt = archetype.typeIndex.get(type_id);
+            const opt = archetype.type_index.get(type_id);
             if (opt == null) {
                 return;
             }
@@ -23,7 +23,7 @@ pub const QueryData = struct {
         };
 
         for (query_data.types.items) |type_id| {
-            if (archetype.typeIndex.get(type_id)) |index| {
+            if (archetype.type_index.get(type_id)) |index| {
                 try query_archetype.indices.append(index);
             }
         }
@@ -108,9 +108,7 @@ pub fn QueryIter(comptime Types: anytype) type {
             return @alignCast(@ptrCast(ecs.Archetype.getChunkComponentData(current_archetype.archetype.types.items[archetype_type_index], current_chunk, iter.current_entity_index - 1).ptr));
         }
 
-        pub fn getMut(_: This, comptime T: type) *T {
-
-        }
+        pub fn getMut(_: This, comptime T: type) *T {}
     };
 }
 

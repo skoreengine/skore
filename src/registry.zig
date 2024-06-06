@@ -14,14 +14,16 @@ pub const TypeHandler = packed struct {
     copy : * const fn(ctx: *anyopaque, alloc: std.mem.Allocator, desc: *anyopaque, origin: *anyopaque) void = undefined,
 };
 
-fn comptimeGetId(comptime t: type) TypeId {
-    comptime {
-        var hash: TypeId = 0;
-        for (@typeName(t)) |n| {
-            hash = @addWithOverflow(@addWithOverflow(hash << 5, hash)[0], n)[0];
-        }
-        return hash;
+fn genId(comptime t: type) TypeId {
+    var hash: TypeId = 0;
+    for (@typeName(t)) |n| {
+        hash = @addWithOverflow(@addWithOverflow(hash << 5, hash)[0], n)[0];
     }
+    return hash;
+}
+
+pub fn getTypeId(comptime t: type) TypeId {
+    return comptime genId(t);
 }
 
 fn canInitialize(comptime T: type) bool {
@@ -34,10 +36,6 @@ fn canInitialize(comptime T: type) bool {
         }
         return ret;
     }
-}
-
-pub fn getTypeId(comptime t: type) TypeId {
-    return comptime comptimeGetId(t);
 }
 
 pub fn NativeTypeHandler(comptime T: type) type {

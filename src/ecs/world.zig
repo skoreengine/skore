@@ -37,7 +37,7 @@ pub const World = struct {
                         self.allocator.rawFree(chunk[0..archetype.chunk_total_alloc_size], 1, 0);
                     }
                     archetype.chunks.deinit();
-                    archetype.typeIndex.deinit();
+                    archetype.type_index.deinit();
                     self.allocator.destroy(archetype);
                 }
                 archetypes.value_ptr.deinit();
@@ -88,7 +88,7 @@ pub const World = struct {
         archetype.entity_count_offset = 0;
         archetype.chunk_state_offset = 0;
         archetype.types = try std.ArrayList(ecs.ArchetypeType).initCapacity(world.allocator, ids.len);
-        archetype.typeIndex = std.AutoHashMap(u128, usize).init(world.allocator);
+        archetype.type_index = std.AutoHashMap(u128, usize).init(world.allocator);
         archetype.chunks = std.ArrayList(ecs.ArchetypeChunk).init(world.allocator);
 
         var stride: usize = 0;
@@ -96,7 +96,7 @@ pub const World = struct {
         if (ids.len > 0) {
             for (ids) |id| {
                 if (world.registry.findTypeById(id)) |type_handler| {
-                    try archetype.typeIndex.put(id, archetype.types.items.len);
+                    try archetype.type_index.put(id, archetype.types.items.len);
 
                     try archetype.types.append(.{
                         .type_id = id,
@@ -236,7 +236,7 @@ pub const World = struct {
                 for (old_archetype.types.items) |archetype_type| {
                     const src = ecs.Archetype.getChunkComponentData(archetype_type, old_chunk, entity_storage.chunk_index);
 
-                    if (new_archetype.typeIndex.get(archetype_type.type_id)) |new_type_index| {
+                    if (new_archetype.type_index.get(archetype_type.type_id)) |new_type_index| {
                         const new_archetype_type = new_archetype.types.items[new_type_index];
                         const dst = ecs.Archetype.getChunkComponentData(new_archetype_type, new_chunk, new_index);
                         @memcpy(dst, src);
@@ -322,7 +322,7 @@ pub const World = struct {
             if (entity_storage.chunk) |chunk| {
                 inline for (fields_info, 0..) |field, i| {
                     const id = ids[i];
-                    if (archetype.typeIndex.get(id)) |index| {
+                    if (archetype.type_index.get(id)) |index| {
                         const archetype_type = archetype.types.items[index];
                         const data = ecs.Archetype.getChunkComponentData(archetype_type, chunk, entity_storage.chunk_index);
 
@@ -369,7 +369,7 @@ pub const World = struct {
         const entity_storage = world.entity_storage.items[entity];
         if (entity_storage.archetype) |archetype| {
             if (entity_storage.chunk) |chunk| {
-                if (archetype.typeIndex.get(skore.registry.getTypeId(T))) |index| {
+                if (archetype.type_index.get(skore.registry.getTypeId(T))) |index| {
                     return @alignCast(@ptrCast(ecs.Archetype.getChunkComponentData(archetype.types.items[index], chunk, entity_storage.chunk_index)));
                 }
             }
