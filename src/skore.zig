@@ -1,4 +1,4 @@
-pub const registry = @import("registry.zig");
+pub const registry = @import("core/registry.zig");
 pub const ecs = @import("ecs/ecs.zig");
 pub const world = @import("ecs/world.zig");
 pub const resource = @import("resource/resource.zig");

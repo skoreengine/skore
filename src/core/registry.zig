@@ -6,12 +6,12 @@ pub const TypeHandler = packed struct {
     ctx: *anyopaque = undefined,
     getName: *const fn () [:0]const u8 = undefined,
     getTypeId: *const fn (ctx: *anyopaque) TypeId = undefined,
-    getSize : *const fn (ctx: *anyopaque) usize = undefined,
+    getSize: *const fn (ctx: *anyopaque) usize = undefined,
     create: *const fn (ctx: *anyopaque, alloc: std.mem.Allocator) *anyopaque = undefined,
     init: *const fn (ctx: *anyopaque, alloc: std.mem.Allocator, ptr: *anyopaque) void = undefined,
     deinit: *const fn (ctx: *anyopaque, alloc: std.mem.Allocator, ptr: *anyopaque) void = undefined,
     destroy: *const fn (ctx: *anyopaque, alloc: std.mem.Allocator, ptr: *anyopaque) void = undefined,
-    copy : * const fn(ctx: *anyopaque, alloc: std.mem.Allocator, desc: *anyopaque, origin: *anyopaque) void = undefined,
+    copy: *const fn (ctx: *anyopaque, alloc: std.mem.Allocator, desc: *anyopaque, origin: *anyopaque) void = undefined,
 };
 
 fn genId(comptime t: type) TypeId {
@@ -103,16 +103,20 @@ pub fn NativeTypeHandler(comptime T: type) type {
     };
 }
 
+const ImplStorage = *const anyopaque;
+
 pub const Registry = struct {
     allocator: std.mem.Allocator = undefined,
     types_by_id: std.AutoHashMap(u128, std.ArrayList(*TypeHandler)) = undefined,
     types_by_name: std.StringHashMap(std.ArrayList(*TypeHandler)) = undefined,
+    impls_by_id: std.AutoHashMap(TypeId, std.ArrayList(ImplStorage)) = undefined,
 
     pub fn init(alloc: std.mem.Allocator) Registry {
         return .{
             .allocator = alloc,
             .types_by_id = std.AutoHashMap(u128, std.ArrayList(*TypeHandler)).init(alloc),
-            .types_by_name = std.StringHashMap(std.ArrayList(*TypeHandler)).init(alloc)
+            .types_by_name = std.StringHashMap(std.ArrayList(*TypeHandler)).init(alloc),
+            .impls_by_id = std.AutoHashMap(TypeId, std.ArrayList(ImplStorage)).init(alloc),
         };
     }
 
@@ -120,12 +124,20 @@ pub const Registry = struct {
         {
             var it = self.types_by_name.iterator();
             while (it.next()) |kv| {
-                for(kv.value_ptr.items) |type_handler| {
+                for (kv.value_ptr.items) |type_handler| {
                     self.allocator.destroy(type_handler);
                 }
                 kv.value_ptr.deinit();
             }
         }
+
+        {
+            var it = self.impls_by_id.iterator();
+            while (it.next()) |kv| {
+                kv.value_ptr.deinit();
+            }
+        }
+
         {
             var it = self.types_by_id.iterator();
             while (it.next()) |kv| {
@@ -135,6 +147,7 @@ pub const Registry = struct {
 
         self.types_by_name.deinit();
         self.types_by_id.deinit();
+        self.impls_by_id.deinit();
     }
 
     fn registerType(self: *Registry, T: type) void {
@@ -172,25 +185,50 @@ pub const Registry = struct {
     }
 
     pub fn findTypeByName(self: *Registry, name: [:0]const u8) ?*TypeHandler {
-        const value = self.types_by_name.get(name);
-        if (value) |v| {
+        if (self.types_by_name.get(name)) |v| {
             return v.getLast();
-        } else {
-            return null;
         }
+        return null;
     }
 
     pub fn findTypeById(self: *Registry, type_id: TypeId) ?*TypeHandler {
-        const value = self.types_by_id.get(type_id);
-        if (value) |v| {
+        if (self.types_by_id.get(type_id)) |v| {
             return v.getLast();
-        } else {
-            return null;
         }
+        return null;
     }
 
-    pub fn findType(self: *Registry, comptime T : type) ?*TypeHandler {
+    pub fn findType(self: *Registry, comptime T: type) ?*TypeHandler {
         return self.findTypeById(getTypeId(T));
+    }
+
+    pub fn addOpaqueImpl(self: *Registry, type_id: TypeId, instance: *const anyopaque) !void {
+        const impl_by_id = try self.impls_by_id.getOrPut(type_id);
+        if (!impl_by_id.found_existing) {
+            impl_by_id.value_ptr.* = std.ArrayList(ImplStorage).init(self.allocator);
+        }
+        try impl_by_id.value_ptr.append(instance);
+    }
+
+    pub fn addImpl(self: *Registry, comptime T: type, ptr: *const T) !void {
+        if (self.findType(T) == null) {
+            self.add(T);
+        }
+        try self.addOpaqueImpl(getTypeId(T), ptr);
+    }
+
+    pub fn findImplById(self: *Registry, type_id: TypeId) ?[]*const anyopaque {
+        if (self.impls_by_id.get(type_id)) |v| {
+            return v.items;
+        }
+        return null;
+    }
+
+    pub fn findImpls(self: *Registry, comptime T: type) ?[]*const T {
+        if (self.findImplById(getTypeId(T))) |impl_opaque| {
+            return @alignCast(@ptrCast(impl_opaque));
+        }
+        return null;
     }
 };
 
@@ -248,4 +286,43 @@ test "test registry basics" {
     } else {
         try std.testing.expect(false);
     }
+}
+
+const ImplTest = struct {
+    vl : i32,
+    call: *const fn (i32) i32,
+};
+
+fn call_impl_test(sum : i32) i32 {
+    return sum + 42;
+}
+
+const impl_test_one = ImplTest{
+    .vl = 1,
+    .call = call_impl_test,
+};
+
+const impl_test_two = ImplTest{
+    .vl = 2,
+    .call = call_impl_test,
+};
+
+test "registry impl" {
+    var registry = Registry.init(std.testing.allocator);
+    defer registry.deinit();
+
+    try registry.addImpl(ImplTest, &impl_test_one);
+    try registry.addImpl(ImplTest, &impl_test_two);
+
+    var sum :i32 = 0;
+
+    if (registry.findImpls(ImplTest)) |impl_tests| {
+        for(impl_tests) |impl_test| {
+            sum += impl_test.vl;
+            try std.testing.expectEqual(42 + impl_test.vl, impl_test.call(impl_test.vl));
+        }
+    }
+
+    try std.testing.expectEqual(3, sum);
+
 }

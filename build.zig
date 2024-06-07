@@ -26,6 +26,8 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+
+    testbed.subsystem = .Windows;
     
     b.installArtifact(testbed);
     testbed.root_module.addImport("skore", module);

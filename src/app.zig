@@ -1,5 +1,6 @@
 const std = @import("std");
-const Registry = @import("registry.zig").Registry;
+const skore = @import("skore.zig");
+const Graphics = @import("graphics/Graphics.zig");
 
 const glfw = @import("zglfw");
 const opengl = @import("zopengl");
@@ -10,11 +11,12 @@ const gl_minor = 0;
 
 pub const App = struct {
     allocator : std.mem.Allocator,
-    registry : *Registry,
+    registry : *skore.Registry,
     running : bool,
     window : *glfw.Window,
+    graphics : Graphics,
 
-    pub fn init(registry :* Registry, allocator : std.mem.Allocator) !App {
+    pub fn init(registry :* skore.Registry, allocator : std.mem.Allocator) !App {
 
         try glfw.init();
 
@@ -25,7 +27,7 @@ pub const App = struct {
         glfw.windowHintTyped(.client_api, .opengl_api);
         glfw.windowHintTyped(.doublebuffer, true);
         glfw.swapInterval(1);
-        glfw.windowHint(.maximized, 1);
+        //glfw.windowHint(.maximized, 1);
 
         const window = try glfw.Window.create(800, 600, "Skore Engine", null);
 
@@ -33,11 +35,15 @@ pub const App = struct {
 
         try opengl.loadCoreProfile(glfw.getProcAddress, gl_major, gl_minor);
 
+        var graphics = Graphics.init(allocator, .vulkan);
+        graphics.createDevice(graphics.getAdapters()[0]);
+
         return .{
             .allocator = allocator,
             .registry = registry,
             .running = true,
-            .window = window
+            .window = window,
+            .graphics = graphics,
         };
     }
 
