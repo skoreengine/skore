@@ -11,12 +11,13 @@ pub const Adapter = struct { handler: *anyopaque };
 pub const Swapchain = struct { handler: *anyopaque };
 
 pub const RenderDevice = struct {
-    getAdapters: *const fn () []Adapter,
-    createDevice: *const fn (adapter: Adapter) void,
-    deinit : *const fn() void,
+    ctx : *anyopaque = undefined,
+    getAdapters: *const fn (ctx : *anyopaque) []Adapter = undefined,
+    createDevice: *const fn (ctx : *anyopaque, adapter: Adapter) void = undefined,
+    deinit : *const fn(ctx : *anyopaque) void = undefined,
 };
 
 pub const RenderDeviceImp = struct {
     rdi_id: u8,
-    init: *const fn (std.mem.Allocator) RenderDevice,
+    init: *const fn (render_device : *RenderDevice, std.mem.Allocator) bool
 };

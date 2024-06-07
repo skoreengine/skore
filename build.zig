@@ -5,8 +5,6 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const zglfw = b.dependency("zglfw", .{});
-    const zopengl = b.dependency("zopengl", .{});
     const vulkan = b.dependency("vulkan", .{});
 
     const module = b.addModule("skore", .{
@@ -15,10 +13,6 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    module.linkLibrary(zglfw.artifact("glfw"));
-
-    module.addImport("zglfw", zglfw.module("root"));
-    module.addImport("zopengl", zopengl.module("root"));
     module.addImport("vulkan", vulkan.module("vulkan"));
 
 
@@ -33,8 +27,6 @@ pub fn build(b: *std.Build) void {
     
     b.installArtifact(testbed);
     testbed.root_module.addImport("skore", module);
-
-    @import("system_sdk").addLibraryPathsTo(testbed);
 
     const run_cmd = b.addRunArtifact(testbed);
     run_cmd.step.dependOn(b.getInstallStep());
