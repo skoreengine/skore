@@ -2749,7 +2749,7 @@ pub var drawElementsInstancedBaseVertexBaseInstance: *const fn (
     basevertex: Int,
     baseinstance: Uint,
 ) callconv(.C) void = undefined;
-pub var getInternalFormativ: *const fn (
+pub var getInternalformativ: *const fn (
     target: Enum,
     internalformat: Enum,
     pname: Enum,
@@ -3038,6 +3038,59 @@ pub var matrixOrthoEXT: *const fn (
     top: Double,
     zNear: Double,
     zFar: Double,
+) callconv(.C) void = undefined;
+//--------------------------------------------------------------------------------------------------
+//
+// EXT_copy_texture
+//
+//--------------------------------------------------------------------------------------------------
+pub var copyTexImage1DEXT: *const fn (
+    target: Enum,
+    level: Int,
+    internalformat: Enum,
+    x: Int,
+    y: Int,
+    width: Sizei,
+    border: Int,
+) callconv(.C) void = undefined;
+pub var copyTexImage2DEXT: *const fn (
+    target: Enum,
+    level: Int,
+    internalformat: Enum,
+    x: Int,
+    y: Int,
+    width: Sizei,
+    height: Sizei,
+    border: Int,
+) callconv(.C) void = undefined;
+pub var copyTexSubImage1DEXT: *const fn (
+    target: Enum,
+    level: Int,
+    xoffset: Int,
+    x: Int,
+    y: Int,
+    width: Sizei,
+) callconv(.C) void = undefined;
+pub var copyTexSubImage2DEXT: *const fn (
+    target: Enum,
+    level: Int,
+    xoffset: Int,
+    yoffset: Int,
+    x: Int,
+    y: Int,
+    width: Sizei,
+    height: Sizei,
+) callconv(.C) void = undefined;
+pub var copyTexSubImage3DEXT: *const fn (
+    target: Enum,
+    level: Int,
+    xoffset: Int,
+    yoffset: Int,
+    zoffset: Int,
+    x: Int,
+    y: Int,
+    width: Sizei,
+    height: Sizei,
 ) callconv(.C) void = undefined;
 //--------------------------------------------------------------------------------------------------
 //

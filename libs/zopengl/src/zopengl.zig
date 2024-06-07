@@ -16,12 +16,16 @@ pub const LoaderFn = *const fn ([:0]const u8) ?*const anyopaque;
 
 pub const Extension = enum {
     KHR_debug,
+    //
+    EXT_copy_texture,
+    //
     NV_bindless_texture,
     NV_shader_buffer_load,
 };
 
 pub const EsExtension = enum {
     OES_vertex_array_object,
+    //
     KHR_debug,
 };
 
@@ -608,7 +612,7 @@ pub fn loadCoreProfile(loader: LoaderFn, major: u32, minor: u32) !void {
         try load("glDrawArraysInstancedBaseInstance", .{&bindings.drawArraysInstancedBaseInstance});
         try load("glDrawElementsInstancedBaseInstance", .{&bindings.drawElementsInstancedBaseInstance});
         try load("glDrawElementsInstancedBaseVertexBaseInstance", .{&bindings.drawElementsInstancedBaseVertexBaseInstance});
-        try load("glGetInternalFormativ", .{&bindings.getInternalFormativ});
+        try load("glGetInternalformativ", .{&bindings.getInternalformativ});
         try load("glGetActiveAtomicCounterBufferiv", .{&bindings.getActiveAtomicCounterBufferiv});
         try load("glBindImageTexture", .{&bindings.bindImageTexture});
         try load("glMemoryBarrier", .{&bindings.memoryBarrier});
@@ -930,6 +934,7 @@ pub fn loadExtension(loader: LoaderFn, extension: Extension) !void {
     loaderFunc = loader;
 
     switch (extension) {
+        // KHR extensions ////////////////////////////////////////////////////////////////////////////////////
         .KHR_debug => {
             try load("glDebugMessageControl", .{&bindings.debugMessageControl});
             try load("glDebugMessageInsert", .{&bindings.debugMessageInsert});
@@ -943,6 +948,15 @@ pub fn loadExtension(loader: LoaderFn, extension: Extension) !void {
             try load("glObjectPtrLabel", .{&bindings.objectPtrLabel});
             try load("glGetObjectPtrLabel", .{&bindings.getObjectPtrLabel});
         },
+        // EXT extensions ////////////////////////////////////////////////////////////////////////////////////
+        .EXT_copy_texture => {
+            try load("glCopyTexImage1DEXT", .{ &bindings.copyTexImage1DEXT, &bindings.copyTexImage1D });
+            try load("glCopyTexImage2DEXT", .{ &bindings.copyTexImage2DEXT, &bindings.copyTexImage2D });
+            try load("glCopyTexSubImage1DEXT", .{ &bindings.copyTexSubImage1DEXT, &bindings.copyTexSubImage1D });
+            try load("glCopyTexSubImage2DEXT", .{ &bindings.copyTexSubImage2DEXT, &bindings.copyTexSubImage2D });
+            try load("glCopyTexSubImage3DEXT", .{ &bindings.copyTexSubImage3DEXT, &bindings.copyTexSubImage3D });
+        },
+        // NV extensions /////////////////////////////////////////////////////////////////////////////////////
         .NV_bindless_texture => {
             try load("glGetTextureHandleNV", .{&bindings.getTextureHandleNV});
             try load("glMakeTextureHandleResidentNV", .{&bindings.makeTextureHandleResidentNV});
@@ -960,6 +974,7 @@ pub fn loadEsExtension(loader: LoaderFn, extension: EsExtension) !void {
     loaderFunc = loader;
 
     switch (extension) {
+        // KHR ES extensions /////////////////////////////////////////////////////////////////////////////////
         .KHR_debug => {
             try load("glDebugMessageControlKHR", .{ &bindings.debugMessageControl, &bindings.debugMessageControlKHR });
             try load("glDebugMessageInsertKHR", .{ &bindings.debugMessageInsert, &bindings.debugMessageInsertKHR });
@@ -973,6 +988,7 @@ pub fn loadEsExtension(loader: LoaderFn, extension: EsExtension) !void {
             try load("glObjectPtrLabelKHR", .{ &bindings.objectPtrLabel, &bindings.objectPtrLabelKHR });
             try load("glGetObjectPtrLabelKHR", .{ &bindings.getObjectPtrLabel, &bindings.getObjectPtrLabelKHR });
         },
+        // OES ES extensions /////////////////////////////////////////////////////////////////////////////////
         .OES_vertex_array_object => {
             try load("glBindVertexArrayOES", .{ &bindings.bindVertexArray, &bindings.bindVertexArrayOES });
             try load("glDeleteVertexArraysOES", .{ &bindings.deleteVertexArrays, &bindings.deleteVertexArraysOES });
@@ -1572,7 +1588,7 @@ comptime {
     @export(bindings.drawArraysInstancedBaseInstance, .{ .name = "glDrawArraysInstancedBaseInstance", .linkage = linkage });
     @export(bindings.drawElementsInstancedBaseInstance, .{ .name = "glDrawElementsInstancedBaseInstance", .linkage = linkage });
     @export(bindings.drawElementsInstancedBaseVertexBaseInstance, .{ .name = "glDrawElementsInstancedBaseVertexBaseInstance", .linkage = linkage });
-    @export(bindings.getInternalFormativ, .{ .name = "glGetInternalFormativ", .linkage = linkage });
+    @export(bindings.getInternalformativ, .{ .name = "glGetInternalformativ", .linkage = linkage });
     @export(bindings.getActiveAtomicCounterBufferiv, .{ .name = "glGetActiveAtomicCounterBufferiv", .linkage = linkage });
     @export(bindings.bindImageTexture, .{ .name = "glBindImageTexture", .linkage = linkage });
     @export(bindings.memoryBarrier, .{ .name = "glMemoryBarrier", .linkage = linkage });

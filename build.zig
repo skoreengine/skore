@@ -9,7 +9,7 @@ pub fn build(b: *std.Build) void {
     const zopengl = b.dependency("zopengl", .{});
 
     const module = b.addModule("skore", .{
-        .root_source_file = .{ .path = "src/skore.zig" },
+        .root_source_file = b.path("src/skore.zig"),
         .target = target,
         .optimize = optimize,
     });
@@ -22,7 +22,7 @@ pub fn build(b: *std.Build) void {
 
     const testbed = b.addExecutable(.{
         .name = "testbed",
-        .root_source_file = .{ .path = "testbed/main.zig" },
+        .root_source_file = b.path("testbed/main.zig"),
         .target = target,
         .optimize = optimize,
     });
@@ -44,7 +44,7 @@ pub fn build(b: *std.Build) void {
 
 
     const exe_unit_tests = b.addTest(.{
-        .root_source_file = .{ .path = "src/skore.zig" },
+        .root_source_file = b.path("src/skore.zig"),
         .target = target,
         .optimize = optimize,
     });
