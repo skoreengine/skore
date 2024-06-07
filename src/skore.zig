@@ -2,6 +2,7 @@ pub const registry = @import("core/registry.zig");
 pub const ecs = @import("ecs/ecs.zig");
 pub const world = @import("ecs/world.zig");
 pub const resource = @import("resource/resource.zig");
+pub const rd = @import("graphics/device/render_device.zig");
 
 pub const TypeId = registry.TypeId;
 pub const UUID = @import("core/UUID.zig");

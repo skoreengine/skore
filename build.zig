@@ -7,6 +7,7 @@ pub fn build(b: *std.Build) void {
 
     const zglfw = b.dependency("zglfw", .{});
     const zopengl = b.dependency("zopengl", .{});
+    const vulkan = b.dependency("vulkan", .{});
 
     const module = b.addModule("skore", .{
         .root_source_file = b.path("src/skore.zig"),
@@ -18,6 +19,7 @@ pub fn build(b: *std.Build) void {
 
     module.addImport("zglfw", zglfw.module("root"));
     module.addImport("zopengl", zopengl.module("root"));
+    module.addImport("vulkan", vulkan.module("vulkan"));
 
 
     const testbed = b.addExecutable(.{

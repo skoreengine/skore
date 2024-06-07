@@ -5,6 +5,7 @@
         .zglfw = .{ .path = "libs/zglfw" },
         .system_sdk = .{ .path = "libs/system-sdk" },
         .zopengl = .{ .path = "libs/zopengl" },
+        .vulkan = .{.path = "libs/vulkan"},
     },
 
     .paths = .{

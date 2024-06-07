@@ -29,13 +29,18 @@ pub const App = struct {
         glfw.swapInterval(1);
         //glfw.windowHint(.maximized, 1);
 
-        const window = try glfw.Window.create(800, 600, "Skore Engine", null);
+        const window = try glfw.Window.create(1920, 1080, "Skore Engine", null);
 
         glfw.makeContextCurrent(window);
 
         try opengl.loadCoreProfile(glfw.getProcAddress, gl_major, gl_minor);
 
-        var graphics = Graphics.init(allocator, .vulkan);
+        var graphics = try Graphics.init(registry, allocator, skore.rd.vulkan_rdi_id);
+
+        if (graphics.getAdapters().len == 0) {
+            return error.NoGPUAdaptersFound;
+        }
+
         graphics.createDevice(graphics.getAdapters()[0]);
 
         return .{

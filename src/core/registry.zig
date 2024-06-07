@@ -217,18 +217,15 @@ pub const Registry = struct {
         try self.addOpaqueImpl(getTypeId(T), ptr);
     }
 
-    pub fn findImplById(self: *Registry, type_id: TypeId) ?[]*const anyopaque {
+    pub fn findImplsById(self: *Registry, type_id: TypeId) []*const anyopaque {
         if (self.impls_by_id.get(type_id)) |v| {
             return v.items;
         }
-        return null;
+        return &.{};
     }
 
-    pub fn findImpls(self: *Registry, comptime T: type) ?[]*const T {
-        if (self.findImplById(getTypeId(T))) |impl_opaque| {
-            return @alignCast(@ptrCast(impl_opaque));
-        }
-        return null;
+    pub fn findImpls(self: *Registry, comptime T: type) []*const T {
+        return @alignCast(@ptrCast(self.findImplsById(getTypeId(T))));
     }
 };
 
@@ -316,11 +313,9 @@ test "registry impl" {
 
     var sum :i32 = 0;
 
-    if (registry.findImpls(ImplTest)) |impl_tests| {
-        for(impl_tests) |impl_test| {
-            sum += impl_test.vl;
-            try std.testing.expectEqual(42 + impl_test.vl, impl_test.call(impl_test.vl));
-        }
+    for(registry.findImpls(ImplTest)) |impl_test| {
+        sum += impl_test.vl;
+        try std.testing.expectEqual(42 + impl_test.vl, impl_test.call(impl_test.vl));
     }
 
     try std.testing.expectEqual(3, sum);
