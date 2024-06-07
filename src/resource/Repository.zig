@@ -11,7 +11,7 @@ pub const page_count = 4096;
 const ResourceStorage = struct {
     rid: RID,
     type_handler: *skore.TypeHandler,
-    instance : ?*anyopaque,
+    instance: ?*anyopaque,
 };
 
 const Page = struct {
@@ -69,86 +69,72 @@ pub fn deinit(self: *Repository) void {
     }
 }
 
-// pub fn createFromTypeHandler(self: *Repository, type_handler: *skore.TypeHandler, uuid : skore.UUID) *anyopaque {
-//
-// }
-
-pub fn create(self: *Repository, comptime T: type) !*T {
-    if (!@hasField(T, "rid")) {
-        @compileError("field 'rid' is required for resources");
-    }
-
-    const instance = try self.allocator.create(T);
-
-    inline for (@typeInfo(T).Struct.fields) |field| {
-        if (field.type == res.SubobjectList) {
-            @field(instance, field.name) = res.SubobjectList.init(self.allocator);
-        }
-    }
-    return instance;
-}
-
-pub fn findById(_: *Repository, _: RID, comptime T: type) T {
+pub fn create(_: *Repository, comptime T: type) T {
     return .{};
 }
 
-pub fn save(_: *Repository, _ : anytype) void {
-    // if (!@hasField(@TypeOf(value), "rid")) {
-    //     @compileError("field 'rid' is required for resources");
-    // }
-
-    // const type_handler_opt = self.registry.findType(T);
-    // if (type_handler_opt) |type_handler| {
-    //     const new_id = self.getOrCreateId(.{});
-    //     var storage = try self.getOrCreatedStorage(new_id);
-    //     storage.rid = new_id;
-    //     storage.type_handler = type_handler;
-    //     storage.instance = null;
-    // }
-    // return error.TypeNotFound;
+pub fn prototype(_: *Repository, _: RID, comptime T: type) T {
+    return .{};
 }
 
-const EntityAsset = struct {
-    rid: RID = undefined,
-    value: u32 = 0,
-};
-
-const TestResource = struct {
-    rid: RID = undefined,
-    value_one: res.Field(u32) = undefined,
-    entities: res.SubobjectList = undefined,
-};
-
-test "repository basics" {
-    var registry = skore.Registry.init(std.testing.allocator);
-    defer registry.deinit();
-
-    var repository = Repository.init(&registry, std.testing.allocator);
-    defer repository.deinit();
-
-    const rid = repository.getOrCreateId(.{});
-    const storage = try repository.getOrCreatedStorage(rid);
-
-    std.debug.print("test? {d}", .{storage.rid.offset});
-
-//     var entity_resource = repository.create(EntityAsset);
-
-
-
-    // entity_resource.value = 30;
-    // repository.save(entity_resource);
-    //
-    // var test_resource = repository.create(TestResource);
-    // test_resource.value_one.set(20);
-    //
-    // test_resource.entities.append(entity_resource.rid);
-
-    const test_resource = try repository.create(TestResource);
-
-
-    repository.save(test_resource);
-    //
-    // const test_resource_read = repository.findById(test_resource.rid, TestResource);
-    // _ = test_resource_read;
-    //try std.testing.expectEqual(30, test_resource_read.rid);
+pub fn push(_: Repository, _: anytype) void {
 }
+
+// pub fn read(self: *Repository, rid: RID, comptime T: type) ?*const T {
+//     if (self.pages[rid.page]) |page| {
+//         if (page.elements[rid.offset].instance) |instance_opaque| {
+//             const instance: *T = @alignCast(@ptrCast(instance_opaque));
+//             return instance;
+//         }
+//     }
+//     return null;
+// }
+
+
+// const SubObjectSet = struct  {
+// };
+//
+// fn Field(comptime T: type) type {
+//     return struct {
+//         const This = @This();
+//
+//
+//         pub fn set(_ : *This, _ : T) void {
+//
+//         }
+//     };
+// }
+//
+// const StreamObject = struct {
+//     pub fn write(_: *StreamObject, _: [:0]const u8) void {}
+//
+//     pub fn read(_: *StreamObject) ?[:0]const u8 {
+//         return null;
+//     }
+// };
+//
+//
+// const TestResource = struct {
+//     rid: RID = undefined,
+//     val: Field(i32) = undefined,
+//     entities: SubObjectSet = undefined,
+//     data: StreamObject = undefined,
+//
+//     pub fn deinit(self: *TestResource) void {
+//         self.entities.deinit();
+//     }
+// };
+//
+// test "repository basics" {
+//     var registry = skore.Registry.init(std.testing.allocator);
+//     defer registry.deinit();
+//
+//     var repository = Repository.init(&registry, std.testing.allocator);
+//     defer repository.deinit();
+//
+//     var test_resource = repository.create(TestResource);
+//     test_resource.val.set(10);
+//     repository.push(test_resource);
+//
+//     _ = repository.prototype(test_resource.rid, TestResource);
+// }

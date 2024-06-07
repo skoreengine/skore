@@ -4,8 +4,8 @@ const RID = @This();
 
 pub const page_size = 4096;
 
-offset: u32,
-page: u32,
+offset: u32 = 0,
+page: u32 = 0,
 
 pub fn valid(rid: RID) bool {
     return rid.offset > 0 or rid.offset > 0;
