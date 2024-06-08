@@ -2,14 +2,31 @@ const std = @import("std");
 const skore = @import("skore.zig");
 const Graphics = @import("graphics/Graphics.zig");
 
+const sdl = @cImport({
+    @cInclude("SDL3/SDL.h");
+});
+
 
 pub const App = struct {
     allocator : std.mem.Allocator,
     registry : *skore.Registry,
     running : bool,
     graphics : Graphics,
+    window : ?*sdl.SDL_Window,
+    context : sdl.SDL_GLContext,
 
     pub fn init(registry :* skore.Registry, allocator : std.mem.Allocator) !App {
+
+        if (sdl.SDL_Init(sdl.SDL_INIT_VIDEO) != 0) {
+            return error.SDLInit;
+        }
+
+        const window = sdl.SDL_CreateWindow("Skore Engine", 800, 600, sdl.SDL_WINDOW_RESIZABLE |  sdl.SDL_WINDOW_MAXIMIZED | sdl.SDL_WINDOW_OPENGL);
+        const context = sdl.SDL_GL_CreateContext(window);
+
+        _ = sdl.SDL_GL_MakeCurrent(window, context);
+        _ = sdl.SDL_GL_SetSwapInterval(1);
+
 
         var graphics = try Graphics.init(registry, allocator, skore.rd.vulkan_rdi_id);
 
@@ -24,12 +41,27 @@ pub const App = struct {
             .registry = registry,
             .running = true,
             .graphics = graphics,
+            .window = window,
+            .context = context
         };
     }
 
     pub fn run(self: *App) !void {
         while (self.running) {
-            self.running = false;
+
+            var event : sdl.SDL_Event = undefined;
+
+            while (sdl.SDL_PollEvent(&event) != sdl.SDL_FALSE) {
+                if (event.type == sdl.SDL_EVENT_QUIT) {
+                    self.running = false;
+                }
+
+                if (event.type == sdl.SDL_EVENT_WINDOW_CLOSE_REQUESTED and event.window.windowID != sdl.SDL_TRUE and sdl.SDL_GetWindowID(self.window) != 0) {
+                    self.running = false;
+                }
+            }
+
+            _ = sdl.SDL_GL_SwapWindow(self.window);
         }
     }
 
@@ -37,6 +69,9 @@ pub const App = struct {
         self.running = false;
     }
 
-    pub fn deinit(_ :*App) void {
+    pub fn deinit(self :*App) void {
+        _ = sdl.SDL_GL_DeleteContext(self.context);
+        sdl.SDL_DestroyWindow(self.window);
+        sdl.SDL_Quit();
     }
 };

@@ -6,6 +6,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const vulkan = b.dependency("vulkan", .{});
+    const sdl = b.dependency("SDL3", .{});
 
     const module = b.addModule("skore", .{
         .root_source_file = b.path("src/skore.zig"),
@@ -14,7 +15,7 @@ pub fn build(b: *std.Build) void {
     });
 
     module.addImport("vulkan", vulkan.module("vulkan"));
-
+    module.linkLibrary(sdl.artifact("SDL3"));
 
     const testbed = b.addExecutable(.{
         .name = "testbed",

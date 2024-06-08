@@ -6,6 +6,10 @@
             .url = "https://github.com/skoreengine/skore-vulkan/archive/ea6d98a533279c285ba7211c440dc903c9502587.tar.gz",
             .hash = "122080266415c348f9f0c1905c51adfd959a91b7af6cb55a3744548949591f8d0e34",
         },
+        .SDL3 = .{
+            .url = "https://github.com/skoreengine/SDL/archive/main.tar.gz",
+            .hash = "1220177e76350ff740150da46e4e701ccc9a55be686030efc5025122368af63d3a11",
+        },
     },
 
     .paths = .{
