@@ -2,16 +2,33 @@ const std = @import("std");
 const skore = @import("../../../skore.zig");
 const rd = @import("../render_device.zig");
 
-const glfw = @import("zglfw");
-
 const vk = @import("vulkan");
 const VulkanDevice = @This();
 
-const VK_SUCCESS = vk.VK_SUCCESS;
+const sdl = @cImport({
+    @cInclude("SDL3/SDL.h");
+    @cInclude("SDL3/SDL_vulkan.h");
+});
+
+const apis: []const vk.ApiInfo = &.{
+    vk.features.version_1_0,
+    vk.features.version_1_1,
+    vk.extensions.khr_surface,
+    vk.extensions.khr_swapchain,
+};
+
+const BaseDispatch = vk.BaseWrapper(apis);
+const InstanceDispatch = vk.InstanceWrapper(apis);
+const DeviceDispatch = vk.DeviceWrapper(apis);
+const Instance = vk.InstanceProxy(apis);
+const Device = vk.DeviceProxy(apis);
+
 
 allocator: std.mem.Allocator,
 adapters: std.ArrayList(rd.Adapter),
-instance: vk.VkInstance,
+vkb: BaseDispatch,
+instance : Instance,
+
 
 fn cast(ctx: *anyopaque) *VulkanDevice {
     return @alignCast(@ptrCast(ctx));
@@ -24,38 +41,38 @@ fn getAdapters(ctx: *anyopaque) []rd.Adapter {
 
 fn createDevice(_: *anyopaque, _: rd.Adapter) void {}
 
-fn deinit(ctx: *anyopaque) void {
-    const vulkan_device = cast(ctx);
-    vulkan_device.adapters.deinit();
-}
-
 fn initVulkan(render_device: *rd.RenderDevice, allocator: std.mem.Allocator) !void {
-
-    if (vk.volkInitialize() != vk.VK_SUCCESS) {
-        return error.vulkanError;
-    }
-
 
     const vulkan_device = try allocator.create(VulkanDevice);
     vulkan_device.allocator = allocator;
     vulkan_device.adapters = std.ArrayList(rd.Adapter).init(allocator);
 
-    const application_info = vk.VkApplicationInfo{
-        .sType = vk.VK_STRUCTURE_TYPE_APPLICATION_INFO,
-        .pApplicationName = "Skore",
-        .applicationVersion = 0,
-        .pEngineName = "Skore",
-        .engineVersion = 0,
-        .apiVersion = vk.VK_API_VERSION_1_3,
+    const instance_proc_addr : *const fn(vk.Instance, [*:0]const u8) vk.PfnVoidFunction = @alignCast(@ptrCast(sdl.SDL_Vulkan_GetVkGetInstanceProcAddr()));
+    vulkan_device.vkb = try BaseDispatch.load(instance_proc_addr);
+
+    var required_extensions_count : u32 = 0;
+    const required_extensions = sdl.SDL_Vulkan_GetInstanceExtensions(&required_extensions_count);
+
+    const app_info = vk.ApplicationInfo{
+        .p_application_name = "skore",
+        .application_version = vk.makeApiVersion(0, 0, 0, 0),
+        .p_engine_name = "skore",
+        .engine_version = vk.makeApiVersion(0, 0, 0, 0),
+        .api_version = vk.API_VERSION_1_3,
     };
 
-    var create_info = vk.VkInstanceCreateInfo{};
-    create_info.sType = vk.VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-    create_info.pApplicationInfo = &application_info;
+    const instance = try vulkan_device.vkb.createInstance(&.{
+        .p_application_info = &app_info,
+        .enabled_extension_count = required_extensions_count,
+        .pp_enabled_extension_names = @ptrCast(required_extensions),
+    }, null);
 
-    if (vk.vkCreateInstance.?(&create_info, null, &vulkan_device.instance) != vk.VK_SUCCESS) {
-        return error.vulkanError;
-    }
+    const vki = try allocator.create(InstanceDispatch);
+    errdefer allocator.destroy(vki);
+    vki.* = try InstanceDispatch.load(instance, vulkan_device.vkb.dispatch.vkGetInstanceProcAddr);
+    vulkan_device.instance = Instance.init(instance, vki);
+    errdefer vulkan_device.instance.destroyInstance(null);
+
 
     try vulkan_device.adapters.append(.{ .handler = undefined });
 
@@ -63,11 +80,20 @@ fn initVulkan(render_device: *rd.RenderDevice, allocator: std.mem.Allocator) !vo
     render_device.getAdapters = getAdapters;
     render_device.createDevice = createDevice;
     render_device.deinit = deinit;
+
 }
 
 fn init(render_device: *rd.RenderDevice, allocator: std.mem.Allocator) bool {
     initVulkan(render_device, allocator) catch return false;
     return true;
+}
+
+fn deinit(ctx: *anyopaque) void {
+    const vulkan_device = cast(ctx);
+
+    vulkan_device.instance.destroyInstance(null);
+    vulkan_device.allocator.destroy(vulkan_device.instance.wrapper);
+    vulkan_device.adapters.deinit();
 }
 
 const vulkan_device_impl = rd.RenderDeviceImp{

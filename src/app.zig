@@ -6,28 +6,19 @@ const sdl = @cImport({
     @cInclude("SDL3/SDL.h");
 });
 
-
 pub const App = struct {
-    allocator : std.mem.Allocator,
-    registry : *skore.Registry,
-    running : bool,
-    graphics : Graphics,
-    window : ?*sdl.SDL_Window,
-    context : sdl.SDL_GLContext,
+    allocator: std.mem.Allocator,
+    registry: *skore.Registry,
+    running: bool,
+    graphics: Graphics,
+    window: ?*sdl.SDL_Window,
 
-    pub fn init(registry :* skore.Registry, allocator : std.mem.Allocator) !App {
-
+    pub fn init(registry: *skore.Registry, allocator: std.mem.Allocator) !App {
         if (sdl.SDL_Init(sdl.SDL_INIT_VIDEO) != 0) {
             return error.SDLInit;
         }
 
-        const window = sdl.SDL_CreateWindow("Skore Engine", 800, 600, sdl.SDL_WINDOW_RESIZABLE |  sdl.SDL_WINDOW_MAXIMIZED | sdl.SDL_WINDOW_OPENGL);
-        const context = sdl.SDL_GL_CreateContext(window);
-
-        _ = sdl.SDL_GL_MakeCurrent(window, context);
-        _ = sdl.SDL_GL_SetSwapInterval(1);
-
-
+        const window = sdl.SDL_CreateWindow("Skore Engine", 800, 600, sdl.SDL_WINDOW_VULKAN | sdl.SDL_WINDOW_RESIZABLE | sdl.SDL_WINDOW_MAXIMIZED);
         var graphics = try Graphics.init(registry, allocator, skore.rd.vulkan_rdi_id);
 
         if (graphics.getAdapters().len == 0) {
@@ -42,14 +33,12 @@ pub const App = struct {
             .running = true,
             .graphics = graphics,
             .window = window,
-            .context = context
         };
     }
 
     pub fn run(self: *App) !void {
         while (self.running) {
-
-            var event : sdl.SDL_Event = undefined;
+            var event: sdl.SDL_Event = undefined;
 
             while (sdl.SDL_PollEvent(&event) != sdl.SDL_FALSE) {
                 if (event.type == sdl.SDL_EVENT_QUIT) {
@@ -69,8 +58,7 @@ pub const App = struct {
         self.running = false;
     }
 
-    pub fn deinit(self :*App) void {
-        _ = sdl.SDL_GL_DeleteContext(self.context);
+    pub fn deinit(self: *App) void {
         sdl.SDL_DestroyWindow(self.window);
         sdl.SDL_Quit();
     }
