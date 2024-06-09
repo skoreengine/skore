@@ -4,7 +4,7 @@
     .dependencies = .{
         .SDL3 = .{
             .url = "https://github.com/skoreengine/SDL/archive/main.tar.gz",
-            .hash = "1220177e76350ff740150da46e4e701ccc9a55be686030efc5025122368af63d3a11",
+            .hash = "12208166ff0840ea0f840ae99edbe2e5d4b50b00aeb7b06c955f639a8db0f066faf5",
         },
         .vulkan = .{
             .url = "https://github.com/skoreengine/skore-vulkan/archive/main.tar.gz",

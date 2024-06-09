@@ -74,6 +74,29 @@ fn initVulkan(render_device: *rd.RenderDevice, allocator: std.mem.Allocator) !vo
     errdefer vulkan_device.instance.destroyInstance(null);
 
 
+    {
+        var device_count: u32 = undefined;
+        _ = try vulkan_device.instance.enumeratePhysicalDevices(&device_count, null);
+
+        const pdevs = try allocator.alloc(vk.PhysicalDevice, device_count);
+        defer allocator.free(pdevs);
+
+        _ = try vulkan_device.instance.enumeratePhysicalDevices(&device_count, pdevs.ptr);
+
+        for (pdevs) |pdev| {
+            const props = vulkan_device.instance.getPhysicalDeviceProperties(pdev);
+
+            std.log.info("device name {s}", .{props.device_name});
+
+
+            // if (try checkSuitable(instance, pdev, allocator, surface)) |candidate| {
+            //     return candidate;
+            // }
+        }
+    }
+
+
+
     try vulkan_device.adapters.append(.{ .handler = undefined });
 
     render_device.ctx = vulkan_device;
